@@ -1,3 +1,5 @@
+#ifndef TXLIN_H
+#define TXLIN_H
 #include <SDL.h>
 #include <cstdlib>
 #include <cstring>
@@ -6,6 +8,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 #define HWND Uint32
 #define DWORD unsigned long
@@ -29,6 +32,8 @@
 #define DBGOUT std::stringstream()
 #endif
 #define DBGINT(var) DBGOUT << #var << " = " << var << std::endl
+#define TXLIN_WARNING(text) std::cerr << "[TXLin/WARNING] " << text << std::endl
+#define TXLIN_WARNINGNOTIMPLEMENTED() TXLIN_WARNING(std::string(__PRETTY_FUNCTION__) + " is not implemented yet.")
 
 // colors
 #define TX_BLACK RGB(0, 0, 0)   
@@ -68,6 +73,8 @@
 #define TXLIN_TEXTSET_HALFWIDTH (TXLIN_TEXTSET_MAXWIDTH / 2)
 #define TXLIN_TEXTSET_MAXHEIGHT 6
 #define TXLIN_TEXTSET_HALFHEIGHT (TXLIN_TEXTSET_MAXHEIGHT / 2)
+
+#define TXLIN_UNPORTABLEDEF_SQUARE(num) ((num) * (num))
 
 struct POINT {
     double x;
@@ -330,12 +337,7 @@ inline bool txPolygon (const POINT* points, int numPoints, HDC dc = txDC()) {
     sdlPoints = nullptr;
     txRedrawWindow();
     return true;
-}
-
-inline bool txEllipse (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
-    // does not work yet
-    return false;
-}
+} 
 
 inline bool txCircle (double x, double y, double r) {
     int xtmp = (int)(r);
@@ -374,7 +376,8 @@ inline bool txCircle (double x, double y, double r) {
 bool txFloodFill (double x, double y, COLORREF color, DWORD mode = FLOODFILLSURFACE, HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
-    return true;    
+    TXLIN_WARNINGNOTIMPLEMENTED();
+    return true;
 }
 
 /*
@@ -618,6 +621,7 @@ inline HFONT txSelectFont (const char* name, double sizeY, HDC dc = txDC()) {
     (void)(dc);
     (void)(sizeY);
     (void)(name);
+    TXLIN_WARNING(std::string("txSelectFont(const char* name, double sizeY, HDC dc) was added to TXLin for source compatibility purposes. It actually does nothing, because TXLin uses its own monolithic font engine rather than FontConfig. Thus, the font \"" + std::string(name) + "\" is not available."));
     return nullptr;
 }
 
@@ -625,16 +629,35 @@ unsigned txSetTextAlign (unsigned align = TA_LEFT, HDC dc = txDC()) {
     if (dc == nullptr)
         return 0;
     (void)(align);
+    TXLIN_WARNING("txSetTextAlign(unsigned align, HDC dc) was added to TXLin for source compatibility purposes. It actually does nothing, because TXLib does not support text alignment at the moment.");
     return TA_LEFT;
 }
 
-inline void txTextCursor(bool value) {
+inline void txTextCursor(bool value = true) {
     // does not work yet
     (void)(value);
+    TXLIN_WARNING("txTextCursor(bool value) was added to TXLin for source compatibility. It actually does nothing, because there is no easy and cross-platform way to turn off cursor blinking on both Linux and Mac OS X.");
 }
 
-HBRUSH txSetFillColor(COLORREF color, HDC dc = txDC()) {
+inline HBRUSH txSetFillColor(COLORREF color, HDC dc = txDC()) {
     if (dc == nullptr)
         return nullptr;
+    TXLIN_WARNING("txSetFillColor(COLORREF color, HDC dc) and txSetColor(COLORREF color, double thickness, HDC dc) do the same thing. In TXLib, there is no difference between the fill color and the foreground color.");
     return txSetColor(color, 1, dc);
 }
+
+inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
+    if (dc == nullptr)
+        return false;
+    int width = txLinUnportableModule((int)(x1 - x0));
+    int height = txLinUnportableModule((int)(y1 - y0));
+    for (int y = (height * (-1)); y < (height + 1); y++) {
+        for (int x = (width * (-1)); x < (width + 1); x++) {
+            if ((TXLIN_UNPORTABLEDEF_SQUARE(x) * (TXLIN_UNPORTABLEDEF_SQUARE(height)) <= (TXLIN_UNPORTABLEDEF_SQUARE(width) * TXLIN_UNPORTABLEDEF_SQUARE(height))))
+                txSetPixel((int)(x0) + x, (int)(y0) + y);
+        }
+    }
+    return true;
+}
+
+#endif
