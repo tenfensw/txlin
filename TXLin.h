@@ -16,6 +16,7 @@
 #define HPEN SDL_Renderer*
 #define RGBQUAD Uint32
 #define HFONT void*
+#define LONG unsigned long
 #define HBRUSH SDL_Renderer*
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
@@ -79,6 +80,11 @@
 struct POINT {
     double x;
     double y;   
+};
+
+struct SIZE {
+    unsigned long cx;
+    unsigned long cy;
 };
 
 struct COLORREF {
@@ -646,6 +652,7 @@ inline HBRUSH txSetFillColor(COLORREF color, HDC dc = txDC()) {
     return txSetColor(color, 1, dc);
 }
 
+/*
 inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
@@ -659,5 +666,123 @@ inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC(
     }
     return true;
 }
+*/
+inline bool txEllipse(double rx_dbl, double ry_dbl, double x_dbl, double y_dbl, HDC dc = txDC()) {
+    if (dc == nullptr)
+        return false;
+    int xc = (int)(x_dbl);
+    int yc = (int)(y_dbl);
+    int rx = (int)(rx_dbl);
+    int ry = (int)(ry_dbl);
+    float dx = 0.0;
+    float dy = 0.0;
+    float d1 = 0.0;
+    float d2 = 0.0;
+    float x = 0.0;
+    float y = (float)(ry);
+    d1 = TXLIN_UNPORTABLEDEF_SQUARE(ry) - (TXLIN_UNPORTABLEDEF_SQUARE(rx) * ry) + (0.25 * TXLIN_UNPORTABLEDEF_SQUARE(rx));
+    dx = 2 * (TXLIN_UNPORTABLEDEF_SQUARE(ry) * x);
+    dy = 2 * (TXLIN_UNPORTABLEDEF_SQUARE(rx) * y);
+    while (dx < dy) {
+        txSetPixel((double)(x + xc), (double)(y + yc), txGetColor(dc), dc);
+        txSetPixel((double)((x * (-1)) + xc), (double)(y + yc), txGetColor(dc), dc);
+        txSetPixel((double)((x * (-1)) + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
+        txSetPixel((double)(x + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
+        x = x + 1.0;
+        dx = dx + (2 * (TXLIN_UNPORTABLEDEF_SQUARE(ry)));
+        if (d1 < 0)
+            d1 = d1 + dx + TXLIN_UNPORTABLEDEF_SQUARE(ry);
+        else {
+            y = y - 1.0;
+            dy = dy - (2 * (TXLIN_UNPORTABLEDEF_SQUARE(rx)));
+            d1 = d1 + dx - dy + TXLIN_UNPORTABLEDEF_SQUARE(ry);
+        }
+    }
+    d2 = (TXLIN_UNPORTABLEDEF_SQUARE(ry) * TXLIN_UNPORTABLEDEF_SQUARE(x + 0.5)) + (TXLIN_UNPORTABLEDEF_SQUARE(rx) * TXLIN_UNPORTABLEDEF_SQUARE(y - 1)) - (TXLIN_UNPORTABLEDEF_SQUARE(rx) * TXLIN_UNPORTABLEDEF_SQUARE(ry)); 
+    while (y > -1) {
+        txSetPixel((double)(x + xc), (double)(y + yc), txGetColor(dc), dc);
+        txSetPixel((double)((x * (-1)) + xc), (double)(y + yc), txGetColor(dc), dc);
+        txSetPixel((double)((x * (-1)) + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
+        txSetPixel((double)(x + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
+        y = y - 1.0;
+        dy = dy - (2 * TXLIN_UNPORTABLEDEF_SQUARE(rx));
+        if (d2 > 0) 
+            d2 = d2 + TXLIN_UNPORTABLEDEF_SQUARE(rx) - dy;
+        else {
+            x = x + 1.0;
+            dx = dx + (2 * TXLIN_UNPORTABLEDEF_SQUARE(ry));
+            d2 = d2 + dx - dy + TXLIN_UNPORTABLEDEF_SQUARE(rx);
+        }
+    }
+    return true;
+}
+
+inline SIZE txGetTextExtent(const char* text, HDC dc = txDC()) {
+    SIZE sizeOfText;
+    sizeOfText.cx = 0.0;
+    sizeOfText.cy = 0.0;
+    if (dc == nullptr || text == nullptr)
+        return sizeOfText;
+    sizeOfText.cx = (unsigned long)(strlen(text) * TXLIN_TEXTSET_MAXWIDTH);
+    sizeOfText.cy = (unsigned long)(TXLIN_TEXTSET_MAXHEIGHT);
+    return sizeOfText;
+}
+
+inline int txGetTextExtentY(const char* text, HDC dc = txDC()) {
+    return txGetTextExtent(text, dc).cy;
+}
+
+inline int txGetTextExtentX(const char* text, HDC dc = txDC()) {
+    return txGetTextExtent(text, dc).cx;
+}
+
+inline double txSleep(double time = 0) {
+    SDL_Delay(time);
+    return time;
+}
+
+inline double txQueryPerformance() {
+    TXLIN_WARNING("txQueryPerformance() was kept in TXLin for compatibility purposes. It will always return a const value.");
+    return 5.0;
+}
+
+inline POINT txMousePos() {
+    int x = 1;
+    int y = 1;
+    SDL_GetGlobalMouseState(&x, &y);
+    POINT result = { (double)(x), (double)(y) };
+    return result;
+}
+
+inline int txMouseX() {
+    return (int)(txMousePos().x);
+}
+
+inline int txMouseY() {
+    return (int)(txMousePos().y);
+}
+
+inline int txMessageBox(const char* text, const char* header = "TXLin", unsigned flags = 0) {
+    if (flags != 0)
+        TXLIN_WARNING("txMessageBox(const char* text, const char* header, unsigned flags) flags parameter is ignored because there are portability issues.");
+    return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, header, text, nullptr);
+}
+
+inline bool txNotifyIcon(unsigned flags, const char* title, const char* format, ...) {
+    if (title == nullptr || format == nullptr)
+        return false;
+    if (flags != 0)
+        TXLIN_WARNING("txNotifyIcon(unsigned flags, const char* title, const char* format, ...) flags parameter is ignored because there are portability issues.");
+#ifdef __APPLE__
+    return (std::system(std::string(std::string("osascript -e 'display notification \"") + std::string(format) + std::string("\" with title \"") + std::string(title) + std::string("\"'")).c_str()) == 0);
+#else
+    if (std::system("which notify-send") != 0) {
+        TXLIN_WARNING("notify-send is not installed on your system, please install it so that notifications would work.");
+        return false;
+    }
+    return (std::system(std::string(std::string("notify-send -u low \"") + std::string(title) + std::string("\" \"") + std::string(format) + "\"").c_str()) == 0);
+#endif
+}
+
 
 #endif
