@@ -19,6 +19,7 @@
 #define HFONT void*
 #define LONG unsigned long
 #define HBRUSH SDL_Renderer*
+#define LOGFONT void
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
@@ -86,6 +87,26 @@
 
 #define TX_TRANSPARENT RGB(-1, -1, -1)
 
+// CLI colors
+
+#define FOREGROUND_BLUE 1
+#define FOREGROUND_RED 4
+#define FOREGROUND_INTENSITY 1
+#define FOREGROUND_GREEN 2
+#define FOREGROUND_BLACK         ( 0                                                         )
+#define FOREGROUND_CYAN          ( FOREGROUND_BLUE       | FOREGROUND_GREEN                  )
+#define FOREGROUND_MAGENTA       ( FOREGROUND_BLUE       | FOREGROUND_RED                    )
+#define FOREGROUND_DARKYELLOW    ( FOREGROUND_GREEN      | FOREGROUND_RED                    )
+#define FOREGROUND_LIGHTGRAY     ( FOREGROUND_BLUE       | FOREGROUND_GREEN | FOREGROUND_RED )
+#define FOREGROUND_DARKGRAY      (                         FOREGROUND_INTENSITY              )
+#define FOREGROUND_LIGHTBLUE     ( FOREGROUND_BLUE       | FOREGROUND_INTENSITY              )
+#define FOREGROUND_LIGHTGREEN    ( FOREGROUND_GREEN      | FOREGROUND_INTENSITY              )
+#define FOREGROUND_LIGHTCYAN     ( FOREGROUND_CYAN       | FOREGROUND_INTENSITY              )
+#define FOREGROUND_LIGHTRED      ( FOREGROUND_RED        | FOREGROUND_INTENSITY              )
+#define FOREGROUND_LIGHTMAGENTA  ( FOREGROUND_MAGENTA    | FOREGROUND_INTENSITY              )
+#define FOREGROUND_YELLOW        ( FOREGROUND_DARKYELLOW | FOREGROUND_INTENSITY              )
+#define FOREGROUND_WHITE         ( FOREGROUND_LIGHTGRAY  | FOREGROUND_INTENSITY              )
+
 // dummy defines that are needed for API compatibility
 #define FLOODFILLBORDER 0x0001
 #define FLOODFILLSURFACE 0x0002
@@ -118,6 +139,7 @@ struct COLORREF {
 
 static bool txLinUnportableHasInitializedTXLinInThisContext = false;
 static HWND txLinUnportableRecentlyCreatedWindow = -1;
+static unsigned txLinUnportableLastTerminalColor = 0x07;
 
 inline HWND txWindow() {
     DBGINT(txLinUnportableRecentlyCreatedWindow);
@@ -845,6 +867,67 @@ inline char* txInputBox(const char* text, const char* caption = "TXLin", const c
     strcpy(allocatedBufferReturned, userAnswered.c_str());
     SDL_RaiseWindow(SDL_GetWindowFromID(txWindow()));
     return allocatedBufferReturned;
+}
+
+LOGFONT* txFontExist(const char* name) {
+    return nullptr;
+}
+
+inline int txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
+    int addCoef = 0;
+    if (isBackground)
+        addCoef = 10;
+    if (bitColor == 0x0)
+        return (31 + addCoef);
+    else if (bitColor == 0x1)
+        return (34 + addCoef);
+    else if (bitColor == 0x2)
+        return (32 + addCoef);
+    else if (bitColor == 0x3)
+        return (36 + addCoef);
+    else if (bitColor == 0x4 || bitColor == 0xC)
+        return (31 + addCoef);
+    else if (bitColor == 0x5 || bitColor == 0xD)
+        return (35 + addCoef);
+    else if (bitColor == 0x6 || bitColor == 0xE)
+        return (33 + addCoef);
+    else
+        return -1;
+
+}
+
+inline std::string txLinUnportableIntToString(int num) {
+    std::stringstream stream;
+    stream << num;
+    return stream.str();
+}
+
+inline void txSetConsoleAttr(unsigned colors = 0x07) {
+    txLinUnportableLastTerminalColor = colors;
+    unsigned starshBit = (colors & 0x10);
+    unsigned mladshBit = (colors & 0x01);
+    int colorForeground = txLinUnportableToLinuxColors(mladshBit, false);
+    int colorBackground = txLinUnportableToLinuxColors(starshBit, true);
+    if (colorForeground == -1 || colorBackground) {
+        std::cout << "\033[0m" << std::endl;
+        return;
+    }
+    std::string foregroundStr = std::string("\033[1;") + txLinUnportableIntToString(colorForeground) + 'm';
+    std::string backgroundStr = std::string("\033[1;") + txLinUnportableIntToString(colorForeground) + 'm';
+    std::cout << backgroundStr << foregroundStr;
+    return;
+}
+
+inline unsigned txGetConsoleAttr() {
+    return txLinUnportableLastTerminalColor;
+}
+
+inline bool txClearConsole() {
+    if (std::system("which clear > /dev/null 2>&1") != 0) {
+        TXLIN_WARNING("txClearConsole() will not work, because ncurses is not installed.");
+        return false;
+    }
+    return (std::system("clear") == 0);
 }
 
 #endif
