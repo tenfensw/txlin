@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <cctype>
 #include <cmath>
@@ -20,11 +21,32 @@
 #define HBRUSH SDL_Renderer*
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
+#define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
 #define TXLIN_VERSIONNUM 0x174a0
+
+#ifdef __clang__
+#define TXLIN_COMPILER "Apple LLVM C++ Compiler"
+#elif defined(__INTEL_COMPILER)
+#define TXLIN_COMPILER "Intel C++ Compiler"
+#elif defined(__GNUC__)
+#define TXLIN_COMPILER "GNU C/C++ Compiler"
+#elif defined(_MSC_VER)
+#pragma message("Windows is not supported by TXLin. And it will never be supported, because on Windows you should use TXLib.")
+#elif defined(__SUNPRO_CC)
+#error "Sun Studio is not supported by TXLin. It's too old, too buggy. Use GCC if you can."
+#else
+#define TXLIN_COMPILER "Unsupported C++ compiler"
+#warning "TXLin does not support your C++ compiler. Continue at your own risk!"
+#endif
+
 
 // compatibility defines
 #define _TX_VERSION TXLIN_VERSION
+#define _TX_AUTHOR TXLIN_AUTHOR
 #define _TX_VER TXLIN_VERSIONNUM
+#define __TX_COMPILER__ TXLIN_COMPILER
+#define meow bark TXLIN_WARNING("meow is deprecated, use bark instead.");
+#define bark ;
 
 // debug define
 #ifdef TXLIN_DEBUG
@@ -33,7 +55,8 @@
 #define DBGOUT std::stringstream()
 #endif
 #define DBGINT(var) DBGOUT << #var << " = " << var << std::endl
-#define TXLIN_WARNING(text) std::cerr << "[TXLin/WARNING] " << text << std::endl
+#define TXLIN_WARNING(text) { if (getenv("TXLIN_DISABLEAPPWARNINGS") == nullptr) { std::cerr << "[TXLin/WARNING] " << text << std::endl; } }
+#define TXLIN_WARNINGWITHMESSAGEBOX(text) { TXLIN_WARNING(text); txMessageBox((text), "TXLin", 0); }
 #define TXLIN_WARNINGNOTIMPLEMENTED() TXLIN_WARNING(std::string(__PRETTY_FUNCTION__) + " is not implemented yet.")
 
 // colors
@@ -135,6 +158,11 @@ inline HWND txCreateWindow(double sizeX, double sizeY, bool centered = true) {
     }
     SDL_Window* window = SDL_CreateWindow("TXLin", x, y, (int)(sizeX), (int)(sizeY), SDL_WINDOW_SHOWN);
     txLinUnportableRecentlyCreatedWindow = SDL_GetWindowID(window);
+    SDL_UpdateWindowSurface(window);
+    SDL_ShowWindow(window);
+    SDL_RaiseWindow(window);
+    SDL_Delay(500);
+    DBGOUT << "Window shown" << std::endl;
     return txLinUnportableRecentlyCreatedWindow;
 }
 
@@ -379,7 +407,7 @@ inline bool txCircle (double x, double y, double r) {
     return true;
 }
 
-bool txFloodFill (double x, double y, COLORREF color, DWORD mode = FLOODFILLSURFACE, HDC dc = txDC()) {
+bool txFloodFill (double x, double y, COLORREF color = txGetColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
     TXLIN_WARNINGNOTIMPLEMENTED();
@@ -437,6 +465,9 @@ inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char chara
         DBGOUT << "space" << std::endl;
     else if (upperChar == '.')
         txSetPixel((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+    else if (upperChar == '\n' || upperChar == '\r' || upperChar == '\0') {
+        TXLIN_WARNING("Newline character was found in the string specified.");
+    }
     else if (upperChar == '!') {
         txLinUnportableMonolithicCharacterSet(x, y, '.');
         txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 2);
@@ -667,7 +698,9 @@ inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC(
     return true;
 }
 */
-inline bool txEllipse(double rx_dbl, double ry_dbl, double x_dbl, double y_dbl, HDC dc = txDC()) {
+
+//inline bool txEllipse(double rx_dbl, double ry_dbl, double x_dbl, double y_dbl, HDC dc = txDC()) {
+inline bool txEllipse(double x_dbl, double y_dbl, double rx_dbl, double ry_dbl, HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
     int xc = (int)(x_dbl);
@@ -776,13 +809,42 @@ inline bool txNotifyIcon(unsigned flags, const char* title, const char* format, 
 #ifdef __APPLE__
     return (std::system(std::string(std::string("osascript -e 'display notification \"") + std::string(format) + std::string("\" with title \"") + std::string(title) + std::string("\"'")).c_str()) == 0);
 #else
-    if (std::system("which notify-send") != 0) {
-        TXLIN_WARNING("notify-send is not installed on your system, please install it so that notifications would work.");
+    if (std::system("which notify-send > /dev/null 2>&1") != 0) {
+        TXLIN_WARNINGWITHMESSAGEBOX("notify-send is not installed on your system, please install it so that notifications would work.");
         return false;
     }
     return (std::system(std::string(std::string("notify-send -u low \"") + std::string(title) + std::string("\" \"") + std::string(format) + "\"").c_str()) == 0);
 #endif
 }
 
+inline char* txInputBox(const char* text, const char* caption = "TXLin", const char* input = "") {
+    const char* saveSocket = "/tmp/txlin-platformnativeinputbox.sock";
+    if (text == nullptr || caption == nullptr || input == nullptr)
+        return nullptr;
+#ifdef __APPLE__
+    std::system(std::string(std::string("osascript -e 'display dialog \"") + std::string(text) + std::string("\" default answer \"") + std::string(input) + std::string("\" with title \"") + std::string(caption) + std::string("\"' > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+#else
+    if (std::system("which zenity > /dev/null 2>&1") != 0) {
+        TXLIN_WARNINGWITHMESSAGEBOX("GNOME zenity is not installed on your system, please install it so that input boxes would work.");
+        return nullptr;
+    }
+    std::system(std::string(std::string("zenity --entry --text=\"") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("\" --entry-text=\"") + std::string(input) + '\"' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+#endif
+    std::ifstream socketStream(saveSocket);
+    std::string userAnswered = std::string((std::istreambuf_iterator<char>(socketStream)), std::istreambuf_iterator<char>());
+#ifdef __APPLE__
+    size_t lastOfText = userAnswered.find_last_of(":");
+    if (lastOfText == std::string::npos)
+        return (char*)(calloc(1, sizeof(char)));
+    std::string toSetUserSelected = "";
+    for (size_t i = (lastOfText + 1); i < userAnswered.size(); i++)
+        toSetUserSelected = toSetUserSelected + userAnswered.at(i);
+    userAnswered = toSetUserSelected;
+#endif
+    char* allocatedBufferReturned = (char*)(calloc(userAnswered.size(), sizeof(char)));
+    strcpy(allocatedBufferReturned, userAnswered.c_str());
+    SDL_RaiseWindow(SDL_GetWindowFromID(txWindow()));
+    return allocatedBufferReturned;
+}
 
 #endif
