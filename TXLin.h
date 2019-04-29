@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cmath>
+#include <csignal>
 #include <cstdint>
 #include <string>
 
@@ -189,7 +190,14 @@ inline SDL_Point* txLinUnportablePointCapsToSDL(const POINT* points, int pointsC
     return pointsFinal;
 }
 
+inline void txLinUnportableUnexpectedSignalHandler(int signal) {
+    SDL_Quit();
+    exit(0);
+}
+
 inline bool txLinUnportableInitSDL() {
+    signal(SIGTERM, txLinUnportableUnexpectedSignalHandler);
+    signal(SIGKILL, txLinUnportableUnexpectedSignalHandler);
     return (SDL_Init(SDL_INIT_VIDEO) == 0);
 }
 
@@ -234,6 +242,7 @@ inline bool txSetDefaults(HDC dc = txDC()) {
     //SDL_RenderClear(rendererContext);
     return true;
 }
+
 
 HDC txDC() {
     DBGOUT << "called txDC()" << std::endl;
@@ -412,14 +421,18 @@ Uint32 txLinUnportableGetPixel(SDL_Surface* surface, int x, int y) {
 }
 
 inline COLORREF txGetPixel (double x, double y, HDC dc = txDC()) {
+    COLORREF result = { 255, 255, 255 };
     if (dc == nullptr)
-        return { 255, 255, 255 };
+        return result;
     Uint32 pixelRaw = txLinUnportableGetPixel(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow())), (int)(x), (int)(y));
     Uint8 red;
     Uint8 green;
     Uint8 blue;
     SDL_GetRGB(pixelRaw, nullptr, &red, &green, &blue);
-    return { (int)(red), (int)(green), (int)(blue) };
+    result.r = (int)(red);
+    result.g = (int)(green);
+    result.b = (int)(blue);
+    return result;
 }
 
 inline bool txLine (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
