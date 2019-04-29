@@ -986,9 +986,10 @@ inline bool txPlaySound(const char* filename, unsigned mode = SND_ASYNC) {
         return false;
     }
 #endif
-    if (filename == nullptr) {
+    if (filename == nullptr || strlen(filename) < 2) {
         std::system(std::string("killall " + playerWithoutArgs).c_str());
-        TXLIN_UNPORTABLEDEF_RMFILE(filename);
+        if (filename != nullptr)
+            TXLIN_UNPORTABLEDEF_RMFILE(filename);
         return true;
     }
     std::string stdStringFilename = filename;
