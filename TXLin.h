@@ -1,6 +1,7 @@
 #ifndef TXLIN_H
 #define TXLIN_H
 #include <SDL.h>
+#include <unistd.h>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -128,12 +129,20 @@
 #define TA_RIGHT 4
 #define TA_CENTER 5
 
+#define SND_ASYNC 80
+#define SND_SYNC 81
+#define SND_LOOP 82
+#define SND_NOSTOP -1
+#define SND_APPLICATION 84
+#define SND_NODEFAULT -1
+
 #define TXLIN_TEXTSET_MAXWIDTH 6
 #define TXLIN_TEXTSET_HALFWIDTH (TXLIN_TEXTSET_MAXWIDTH / 2)
 #define TXLIN_TEXTSET_MAXHEIGHT 6
 #define TXLIN_TEXTSET_HALFHEIGHT (TXLIN_TEXTSET_MAXHEIGHT / 2)
 
 #define TXLIN_UNPORTABLEDEF_SQUARE(num) ((num) * (num))
+#define TXLIN_UNPORTABLEDEF_RMFILE(filename) std::system(std::string(std::string("rm -r -f \"") + std::string(filename) + '\"').c_str())
 
 #define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
 
@@ -963,6 +972,44 @@ inline bool GetAsyncKeyState(Uint8 key) {
     if (states[key])
         return true;
     return false;
+}
+
+inline bool txPlaySound(const char* filename, unsigned mode = SND_ASYNC) {
+    std::string playerWithoutArgs = "play";
+    std::string player = "play";
+#ifdef __APPLE__
+    playerWithoutArgs = "afplay";
+    player = "afplay -q 1 -d";
+#else
+    if (std::system("which play > /dev/null 2>&1") != 0) {
+        TXLIN_WARNINGWITHMESSAGEBOX("SoX is required to play audio files. It is not installed on your system. Please install it to continue.");
+        return false;
+    }
+#endif
+    if (filename == nullptr) {
+        std::system(std::string("killall " + playerWithoutArgs).c_str());
+        TXLIN_UNPORTABLEDEF_RMFILE(filename);
+        return true;
+    }
+    std::string stdStringFilename = filename;
+    if (stdStringFilename.find("/") == std::string::npos)
+        stdStringFilename = std::string(getcwd(nullptr, 256)) + "/" + stdStringFilename;
+    std::string cmd = player + ' ' + stdStringFilename;
+    if (mode == SND_ASYNC)
+        cmd = cmd + " &";
+    else if (mode == SND_LOOP)
+        cmd = "sh -c \"touch /tmp/txlinplay.tmp; while test -f /tmp/txlinplay.tmp; do " + cmd + "; done\" &";
+    else if (mode == SND_APPLICATION)
+#ifdef __APPLE__
+        cmd = "open \"" + stdStringFilename + '\"' + std::string(" &");
+#else
+        cmd = "xdg-open \"" + stdStringFilename + '\"' + std::string(" &");
+#endif
+    else {
+        TXLIN_WARNING("Unsupported txPlaySound(const char* filename, unsigned mode) argument");
+        return false;
+    }
+    return (std::system(cmd.c_str()) == 0);
 }
 
 #endif
