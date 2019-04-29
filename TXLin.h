@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <cctype>
+#include <cstdio>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -380,16 +381,45 @@ inline bool txPixel (double x, double y, double red, double green, double blue, 
     return txSetPixel(x, y, RGB((int)(red), (int)(green), (int)(blue)), dc);
 }
 
+Uint32 txLinUnportableGetPixel(SDL_Surface* surface, int x, int y) {
+    // from http://sdl.beuc.net/sdl.wiki/Pixel_Access
+    int bpp = surface->format->BytesPerPixel;
+    Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch(bpp) {
+    case 1:
+        return *p;
+        break;
+
+    case 2:
+        return *(Uint16 *)p;
+        break;
+
+    case 3:
+        if(SDL_BYTEORDER == SDL_BIG_ENDIAN)
+            return p[0] << 16 | p[1] << 8 | p[2];
+        else
+            return p[0] | p[1] << 8 | p[2] << 16;
+        break;
+
+    case 4:
+        return *(Uint32 *)p;
+        break;
+
+    default:
+        return 0;
+    }
+}
+
 inline COLORREF txGetPixel (double x, double y, HDC dc = txDC()) {
-    /*
-    Uint32* arrayOfPixels = txVideoMemory(dc);
-    Uint32 pixel = arrayOfPixels[((int)(y) * txGetExtentX(dc)) + (int)(x)];
-    Uint8 rBit, gBit, bBit;
-    SDL_GetRGB(pixel, nullptr, &rBit, &gBit, &bBit);
-    COLORREF result = { (int)(rBit), (int)(gBit), (int)(bBit) };
-    */
-    COLORREF result = { 255, 255, 255 };
-    return result;
+    if (dc == nullptr)
+        return { 255, 255, 255 };
+    Uint32 pixelRaw = txLinUnportableGetPixel(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow())), (int)(x), (int)(y));
+    Uint8 red;
+    Uint8 green;
+    Uint8 blue;
+    SDL_GetRGB(pixelRaw, nullptr, &red, &green, &blue);
+    return { (int)(red), (int)(green), (int)(blue) };
 }
 
 inline bool txLine (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
@@ -834,7 +864,7 @@ inline double txSleep(double time = 0) {
 
 inline double txQueryPerformance() {
     TXLIN_WARNING("txQueryPerformance() was kept in TXLin for compatibility purposes. It will always return a const value.");
-    return 5.0;
+    return 7.9;
 }
 
 inline POINT txMousePos() {
@@ -948,9 +978,8 @@ inline void txSetConsoleAttr(unsigned colors = 0x07) {
         std::cout << "\033[0m" << std::endl;
         return;
     }
-    std::string foregroundStr = std::string("\033[1;") + txLinUnportableIntToString(colorForeground) + 'm';
-    std::string backgroundStr = std::string("\033[1;") + txLinUnportableIntToString(colorForeground) + 'm';
-    std::cout << backgroundStr << foregroundStr;
+    //printf("\033[0;%dm", colorBackground);
+    printf("\033[0;%dm", colorForeground);
     return;
 }
 
@@ -1012,5 +1041,39 @@ inline bool txPlaySound(const char* filename, unsigned mode = SND_ASYNC) {
     }
     return (std::system(cmd.c_str()) == 0);
 }
+
+inline void txDump(const void* address, const char* name) {
+    txSetConsoleAttr(FOREGROUND_LIGHTMAGENTA);
+    printf("{<%p>}", address);
+    txSetConsoleAttr(FOREGROUND_WHITE);
+    printf("\n");
+    const unsigned char* p = (const unsigned char*)(address);
+    unsigned x = 0;
+    unsigned attr = txGetConsoleAttr();
+    txSetConsoleAttr (FOREGROUND_WHITE);
+    printf ("\n%*.*s ", (int)(sizeof(address)) * 2, (int)(sizeof(address)) * 2, ((name)? name : ""));
+    txSetConsoleAttr (FOREGROUND_YELLOW);
+    for (x = 0; x < 16; x++)
+        printf ("%02X ", x);
+    for (x = 0; x < 16; x++)
+        printf ("%X",    x);
+
+    for (int y = 0; y < 16; y++, p += 16) {
+        txSetConsoleAttr (FOREGROUND_YELLOW);
+        printf ("\n" "%*p ", (int)(sizeof(address)) * 2, p);
+        int color = FOREGROUND_LIGHTGREEN;
+        for (x = 0; x < 16; x++) {
+            txSetConsoleAttr (color + x/4%2); 
+            printf ("%02X ", p[x]); 
+        }
+        for (x = 0; x < 16; x++) { 
+            txSetConsoleAttr (color + x/4%2); 
+            printf ("%c", (isprint (p[x]) && !iscntrl (p[x]))? p[x] : '.'); 
+        }
+    }
+    txSetConsoleAttr (attr);
+    printf ("\n");
+}
+
 
 #endif
