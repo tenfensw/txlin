@@ -20,6 +20,7 @@
 #define LONG unsigned long
 #define HBRUSH SDL_Renderer*
 #define LOGFONT void
+#define SHORT bool
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
@@ -40,6 +41,11 @@
 #warning "TXLin does not support your C++ compiler. Continue at your own risk!"
 #endif
 
+#ifdef __APPLE__
+#define TXLIN_NO_3D_ACCELERATION 1
+#endif
+
+#define THIS_IS_TXLIN
 
 // compatibility defines
 #define _TX_VERSION TXLIN_VERSION
@@ -48,6 +54,14 @@
 #define __TX_COMPILER__ TXLIN_COMPILER
 #define meow bark TXLIN_WARNING("meow is deprecated, use bark instead.");
 #define bark ;
+#define txPI 3.14
+
+#define VK_UP SDL_SCANCODE_UP
+#define VK_DOWN SDL_SCANCODE_DOWN
+#define VK_LEFT SDL_SCANCODE_LEFT
+#define VK_RIGHT SDL_SCANCODE_RIGHT
+#define VK_ESCAPE SDL_SCANCODE_ESCAPE
+#define VK_SHIFT SDL_SCANCODE_LSHIFT
 
 // debug define
 #ifdef TXLIN_DEBUG
@@ -121,6 +135,8 @@
 
 #define TXLIN_UNPORTABLEDEF_SQUARE(num) ((num) * (num))
 
+#define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
+
 struct POINT {
     double x;
     double y;   
@@ -140,6 +156,14 @@ struct COLORREF {
 static bool txLinUnportableHasInitializedTXLinInThisContext = false;
 static HWND txLinUnportableRecentlyCreatedWindow = -1;
 static unsigned txLinUnportableLastTerminalColor = 0x07;
+
+inline void txLinUnportableSDLProcessOneEvent() {
+    SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
+    if (SDL_PollEvent(eventHandler) == 0)
+        return;
+    if (eventHandler->type == SDL_QUIT)
+        SDL_Quit();
+}
 
 inline HWND txWindow() {
     DBGINT(txLinUnportableRecentlyCreatedWindow);
@@ -167,6 +191,7 @@ inline int txLinUnportableModule(int number) {
 
 inline void txRedrawWindow() {
     SDL_UpdateWindowSurface(SDL_GetWindowFromID(txWindow()));
+    txLinUnportableSDLProcessOneEvent();
 }
 
 inline HWND txCreateWindow(double sizeX, double sizeY, bool centered = true) {
@@ -208,7 +233,11 @@ HDC txDC() {
     SDL_Renderer* resultRenderer = SDL_GetRenderer(window);
     if (resultRenderer == nullptr) {
         DBGOUT << "regenerating renderer" << std::endl;
+#if !defined(TXLIN_NO_3D_ACCELERATION) && !defined(_TX_DESTROY_3D)
+        resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+#else
         resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+#endif
         txSetDefaults(resultRenderer);
         txRedrawWindow();
         //txSetDefaults(resultRenderer);
@@ -457,17 +486,7 @@ bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y
     return false;
 }
 
-
-inline int txBegin() {
-    return -1;
-}
-
-inline int txEnd() {
-    return -1;
-}
-
 inline void txLinUnportableSDLEventLoop() {
-    SDL_Delay(1000);
     bool stop = false;
     SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
     while (stop == false) {
@@ -479,6 +498,14 @@ inline void txLinUnportableSDLEventLoop() {
         }
     }
     return;
+}
+
+inline int txBegin() {
+    return 0;
+}
+
+inline int txEnd() {
+    return -1;
 }
 
 inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char character) {
@@ -923,11 +950,19 @@ inline unsigned txGetConsoleAttr() {
 }
 
 inline bool txClearConsole() {
-    if (std::system("which clear > /dev/null 2>&1") != 0) {
-        TXLIN_WARNING("txClearConsole() will not work, because ncurses is not installed.");
-        return false;
-    }
     return (std::system("clear") == 0);
+}
+
+inline void SetWindowText(HWND windowDescriptor, const char* title) {
+    SDL_SetWindowTitle(SDL_GetWindowFromID(windowDescriptor), title);
+    return;
+}
+
+inline bool GetAsyncKeyState(Uint8 key) {
+    const Uint8* states = SDL_GetKeyboardState(NULL);
+    if (states[key])
+        return true;
+    return false;
 }
 
 #endif
