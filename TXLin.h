@@ -990,9 +990,12 @@ inline std::string txLinUnportableIntToString(int num) {
 
 inline void txSetConsoleAttr(unsigned colors = 0x07) {
     txLinUnportableLastTerminalColor = colors;
-    unsigned starshBit = (colors & 0x10);
-    unsigned mladshBit = (colors & 0x01);
-    printf("%s", txLinUnportableToLinuxColors(mladshBit, false).c_str());
+    unsigned colors2 = colors;
+    if (colors2 > 0x9) {
+        while (colors2 >= 0x10)
+            colors2 = colors2 - 0x10;
+    }
+    printf("%s", txLinUnportableToLinuxColors(colors2, false).c_str());
     return;
 }
 
@@ -1048,7 +1051,7 @@ inline bool txPlaySound(const char* filename, unsigned mode = SND_ASYNC) {
 #else
         cmd = "xdg-open \"" + stdStringFilename + '\"' + std::string(" &");
 #endif
-    else {
+    else if (mode == -1) {
         TXLIN_WARNING("Unsupported txPlaySound(const char* filename, unsigned mode) argument");
         return false;
     }
