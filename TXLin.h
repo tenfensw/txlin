@@ -107,7 +107,7 @@
 
 #define FOREGROUND_BLUE 1
 #define FOREGROUND_RED 4
-#define FOREGROUND_INTENSITY 1
+#define FOREGROUND_INTENSITY 8
 #define FOREGROUND_GREEN 2
 #define FOREGROUND_BLACK         ( 0                                                         )
 #define FOREGROUND_CYAN          ( FOREGROUND_BLUE       | FOREGROUND_GREEN                  )
@@ -939,6 +939,7 @@ LOGFONT* txFontExist(const char* name) {
     return nullptr;
 }
 
+/*
 inline int txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
     int addCoef = 0;
     if (isBackground)
@@ -961,6 +962,25 @@ inline int txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = f
         return -1;
 
 }
+*/
+
+inline std::string txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
+    if (bitColor == 0x1)
+        return "\033[1;34m";
+    else if (bitColor == 0x2)
+        return "\033[1;32m";
+    else if (bitColor == 0x3)
+        return "\033[1;36m";
+    else if (bitColor == 0x4 || bitColor == 0xC)
+        return "\033[1;31m";
+    else if (bitColor == 0x5 || bitColor == 0xD)
+        return "\033[1;35m";
+    else if (bitColor == 0x6 || bitColor == 0xE)
+        return "\033[1;33m";
+    else
+        return "\033[0m";
+
+}
 
 inline std::string txLinUnportableIntToString(int num) {
     std::stringstream stream;
@@ -972,14 +992,7 @@ inline void txSetConsoleAttr(unsigned colors = 0x07) {
     txLinUnportableLastTerminalColor = colors;
     unsigned starshBit = (colors & 0x10);
     unsigned mladshBit = (colors & 0x01);
-    int colorForeground = txLinUnportableToLinuxColors(mladshBit, false);
-    int colorBackground = txLinUnportableToLinuxColors(starshBit, true);
-    if (colorForeground == -1 || colorBackground) {
-        std::cout << "\033[0m" << std::endl;
-        return;
-    }
-    //printf("\033[0;%dm", colorBackground);
-    printf("\033[0;%dm", colorForeground);
+    printf("%s", txLinUnportableToLinuxColors(mladshBit, false).c_str());
     return;
 }
 
@@ -1049,7 +1062,7 @@ inline void txDump(const void* address, const char* name) {
     printf("\n");
     const unsigned char* p = (const unsigned char*)(address);
     unsigned x = 0;
-    unsigned attr = txGetConsoleAttr();
+    unsigned attr = FOREGROUND_WHITE;
     txSetConsoleAttr (FOREGROUND_WHITE);
     printf ("\n%*.*s ", (int)(sizeof(address)) * 2, (int)(sizeof(address)) * 2, ((name)? name : ""));
     txSetConsoleAttr (FOREGROUND_YELLOW);
@@ -1071,7 +1084,7 @@ inline void txDump(const void* address, const char* name) {
             printf ("%c", (isprint (p[x]) && !iscntrl (p[x]))? p[x] : '.'); 
         }
     }
-    txSetConsoleAttr (attr);
+    txSetConsoleAttr(attr);
     printf ("\n");
 }
 
