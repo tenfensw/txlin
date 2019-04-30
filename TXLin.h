@@ -21,6 +21,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <SDL.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <sys/types.h>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -355,9 +356,9 @@ inline unsigned txVersionNumber() {
 }
 
 const char* txGetModuleFileName (bool fileNameOnly = true) {
-    // currently does not work
-    (void)(fileNameOnly);
-    return nullptr;
+    if (fileNameOnly)
+        return nullptr;
+    return SDL_GetWindowTitle(SDL_GetWindowFromID(txWindow()));
 }
 
 COLORREF RGB (int red, int green, int blue) {
@@ -606,14 +607,14 @@ inline bool txUpdateWindow(bool doUpdate = true) {
 }
 
 inline int txBegin() {
-    bool result = txUpdateWindow(true);
+    bool result = txUpdateWindow(false);
     if (result)
         return 0;
     return 1;
 }
 
 inline int txEnd() {
-    bool result = txUpdateWindow(false);
+    bool result = txUpdateWindow(true);
     if (result) {
         txLinUnportableSDLProcessOneEvent();
         return 0;
