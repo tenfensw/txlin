@@ -28,21 +28,34 @@
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
 #define TXLIN_VERSIONNUM 0x174a0
+#ifdef TXLIN_MODULE
+#define _TX_MODULE TXLIN_MODULE
+#elif defined(_TX_MODULE)
+#define TXLIN_MODULE _TX_MODULE
+#else
+#define TXLIN_MODULE "TXLin"
+#define _TX_MODULE "TXLin"
+#endif
 
 #ifdef __clang__
 #define TXLIN_COMPILER "Apple LLVM C++ Compiler"
+#define __TX_FUNCTION__ __PRETTY_FUNCTION__
 #elif defined(__INTEL_COMPILER)
 #define TXLIN_COMPILER "Intel C++ Compiler"
+#define __TX_FUNCTION__ __FUNCTION__
 #elif defined(__GNUC__)
 #define TXLIN_COMPILER "GNU C/C++ Compiler"
+#define __TX_FUNCTION__ __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
 #pragma message("Windows is not supported by TXLin. And it will never be supported, because on Windows you should use TXLib.")
 #elif defined(__SUNPRO_CC)
 #error "Sun Studio is not supported by TXLin. It's too old, too buggy. Use GCC if you can."
 #else
 #define TXLIN_COMPILER "Unsupported C++ compiler"
+#define __TX_FUNCTION__ "(__TX_FUNCTION__ not supported with your compiler)"
 #warning "TXLin does not support your C++ compiler. Continue at your own risk!"
 #endif
+#define __TX_FILENAME__ __FILE__
 
 #ifdef __APPLE__
 #define TXLIN_NO_3D_ACCELERATION 1
@@ -144,9 +157,18 @@
 #define TXLIN_TEXTSET_HALFHEIGHT (TXLIN_TEXTSET_MAXHEIGHT / 2)
 
 #define TXLIN_UNPORTABLEDEF_SQUARE(num) ((num) * (num))
+#define txSqr(x) TXLIN_UNPORTABLEDEF_SQUARE((double)(x))
 #define TXLIN_UNPORTABLEDEF_RMFILE(filename) std::system(std::string(std::string("rm -r -f \"") + std::string(filename) + '\"').c_str())
 
+#define TXLIN_UNPORTABLEDEF_EVENTPROCESSING_PROCESSED 0
+#define TXLIN_UNPORTABLEDEF_EVENTPROCESSING_QUIT 1
+#define TXLIN_UNPORTABLEDEF_EVENTPROCESSING_NONE 2
+
 #define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
+
+#ifdef _TX_ALLOW_KILL_PARENT
+#warning "_TX_ALLOW_KILL_PARENT is ignored by TXLin."
+#endif
 
 struct POINT {
     double x;
@@ -167,16 +189,26 @@ struct COLORREF {
 static bool txLinUnportableHasInitializedTXLinInThisContext = false;
 static HWND txLinUnportableRecentlyCreatedWindow = -1;
 static unsigned txLinUnportableLastTerminalColor = 0x07;
+static bool txLinUnportableAutomaticWindowUpdates = true;
 
-inline void txLinUnportableSDLProcessOneEvent() {
+inline HDC txDC();
+inline HWND txWindow();
+
+inline int txLinUnportableSDLProcessOneEvent() {
     SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
     if (SDL_PollEvent(eventHandler) == 0)
-        return;
-    if (eventHandler->type == SDL_QUIT)
+        return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_NONE;
+    if (eventHandler->type == SDL_QUIT) {
+        SDL_DestroyRenderer(txDC());
+        SDL_DestroyWindow(SDL_GetWindowFromID(txWindow()));
         SDL_Quit();
+        exit(0);
+        return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_QUIT;
+    }
+    return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_PROCESSED;
 }
 
-inline HWND txWindow() {
+HWND txWindow() {
     DBGINT(txLinUnportableRecentlyCreatedWindow);
     return txLinUnportableRecentlyCreatedWindow;
 }
@@ -231,8 +263,6 @@ inline HWND txCreateWindow(double sizeX, double sizeY, bool centered = true) {
     return txLinUnportableRecentlyCreatedWindow;
 }
 
-inline HDC txDC();
-
 inline bool txSetDefaults(HDC dc = txDC()) {
     DBGOUT << "called txSetDefaults" << std::endl;
     SDL_Renderer* rendererContext = dc;
@@ -265,9 +295,7 @@ HDC txDC() {
 }
 
 inline RGBQUAD* txVideoMemory(HDC dc = txDC()) {
-    //if (dc == nullptr)
-        return nullptr;
-    //return (RGBQUAD*)(dc->pixels);
+    return (RGBQUAD*)(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->pixels);
 }
 
 
@@ -447,7 +475,8 @@ inline bool txLine (double x0, double y0, double x1, double y1, HDC dc = txDC())
     DBGOUT << "SDL_RenderDrawLine" << std::endl;
     SDL_RenderDrawLine(dc, (int)(x0), (int)(y0), (int)(x1), (int)(y1));
     DBGOUT << "txRedrawWindow()" << std::endl;
-    txRedrawWindow(); 
+    if (txLinUnportableAutomaticWindowUpdates)
+        txRedrawWindow(); 
     DBGOUT << "return true;" << std::endl;
     return true;
 }
@@ -461,7 +490,8 @@ inline bool txRectangle (double x0, double y0, double x1, double y1, HDC dc = tx
     rectangle.w = txLinUnportableModule(x1 - x0);
     rectangle.h = txLinUnportableModule(y1 - y0);
     SDL_RenderDrawRect(dc, &rectangle);
-    txRedrawWindow();
+    if (txLinUnportableAutomaticWindowUpdates)
+        txRedrawWindow(); 
     return true;
 }
 
@@ -472,7 +502,8 @@ inline bool txPolygon (const POINT* points, int numPoints, HDC dc = txDC()) {
     SDL_RenderDrawPoints(dc, sdlPoints, numPoints);
     free(sdlPoints);
     sdlPoints = nullptr;
-    txRedrawWindow();
+    if (txLinUnportableAutomaticWindowUpdates)
+        txRedrawWindow(); 
     return true;
 } 
 
@@ -540,24 +571,36 @@ bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y
 
 inline void txLinUnportableSDLEventLoop() {
     bool stop = false;
-    SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
     while (stop == false) {
-        while (SDL_PollEvent(eventHandler) != 0) {
-            if (eventHandler->type == SDL_QUIT) {
-                stop = true;
-                break;
-            }
+        if (txLinUnportableSDLProcessOneEvent() == TXLIN_UNPORTABLEDEF_EVENTPROCESSING_QUIT) {
+            stop = true;
+            break;
         }
     }
     return;
 }
 
+inline bool txUpdateWindow(bool doUpdate = true) {
+    txLinUnportableAutomaticWindowUpdates = doUpdate;
+    if (doUpdate)
+        txRedrawWindow();
+    return doUpdate;
+}
+
 inline int txBegin() {
-    return 0;
+    bool result = txUpdateWindow(true);
+    if (result)
+        return 0;
+    return 1;
 }
 
 inline int txEnd() {
-    return -1;
+    bool result = txUpdateWindow(false);
+    if (result) {
+        txLinUnportableSDLProcessOneEvent();
+        return 0;
+    }
+    return 1;
 }
 
 inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char character) {
@@ -1104,5 +1147,15 @@ inline void txDump(const void* address, const char* name) {
     printf ("\n");
 }
 
+inline bool txLock(bool wait = true) {
+    (void)(wait);
+    TXLIN_WARNING("txLock(bool wait) is kept in TXLin for compatibility purposes and does nothing.");
+    return false;
+}
+
+inline bool txUnlock() {
+    TXLIN_WARNING("txUnlock() is kept in TXLin for compatibility purposes and does nothing.");
+    return false;
+}
 
 #endif
