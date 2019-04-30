@@ -1198,4 +1198,71 @@ inline bool txDeleteDC(HDC dc) {
     return true;
 }
 
+inline bool txBitBlt(HDC destImage, double xDest, double yDest, double width = 0.0, double height = 0.0, HDC sourceImage = txDC(), double xSource = 0.0, double ySource = 0.0) {
+    if (sourceImage == nullptr || destImage == nullptr)
+        return false;
+    int kickstartSourceX = (int)(xSource);
+    int kickstartSourceY = (int)(ySource);
+    int kickstartDestX = (int)(xDest);
+    int kickstartDestY = (int)(yDest);
+    for (int cy = kickstartSourceY; cy < (int)(height); cy++) {
+        for (int cx = kickstartSourceX; cx < (int)(width); cx++) {
+            COLORREF clrPix = txGetPixel(cx, cy, sourceImage);
+            txSetPixel(kickstartDestX, kickstartDestY, clrPix, destImage);
+            kickstartDestX = kickstartDestX + 1;
+            kickstartDestY = kickstartDestY + 1;
+            if (kickstartDestX >= (int)(width)) {
+                kickstartDestX = (int)(xDest);
+                break;
+            }
+        }
+        kickstartDestY = kickstartDestY + 1;
+        if (kickstartDestY >= (int)(height))
+            break;
+    }
+    return true;
+}
+
+inline bool txBitBlt(double xDest, double yDest, HDC sourceImage, double xSource = 0.0, double ySource = 0.0) {
+    if (sourceImage == nullptr)
+        return false;
+    int width = 0;
+    int height = 0;
+    SDL_GetRendererOutputSize(sourceImage, &width, &height);
+    return txBitBlt(txDC(), xDest, yDest, (double)(width), (double)(height), sourceImage, xSource, ySource);
+}
+
+inline bool txTransparentBlt(HDC destImage, double xDest, double yDest, double width, double height, HDC sourceImage, double xSource = 0.0, double ySource = 0.0, COLORREF transColor = TX_BLACK) {
+    if (destImage == nullptr || sourceImage == nullptr)
+        return false;
+    (void)(transColor);
+    return txBitBlt(destImage, xDest, yDest, width, height, sourceImage, xSource, ySource);
+}
+
+inline bool txTransparentBlt(double xDest, double yDest, HDC sourceImage, COLORREF transColor = TX_BLACK, double xSource = 0.0, double ySource = 0.0) {
+    if (sourceImage == nullptr)
+        return false;
+    int width = 0;
+    int height = 0;
+    SDL_GetRendererOutputSize(sourceImage, &width, &height);
+    return txTransparentBlt(txDC(), xDest, yDest, (double)(width), (double)(height), sourceImage, xSource, ySource);
+}
+
+
+inline bool txAlphaBlend(HDC destImage, double xDest, double yDest, double width, double height, HDC sourceImage, double xSource = 0.0, double ySource = 0.0, double alpha = 1.0) {
+    if (destImage == nullptr || sourceImage == nullptr)
+        return false;
+    (void)(alpha);
+    return txBitBlt(destImage, xDest, yDest, width, height, sourceImage, xSource, ySource);
+}
+
+inline bool txAlphaBlend(double xDest, double yDest, HDC sourceImage, double xSource = 0.0, double ySource = 0.0, double alpha = 1.0) {
+    if (sourceImage == nullptr)
+        return false;
+    int width = 0;
+    int height = 0;
+    SDL_GetRendererOutputSize(sourceImage, &width, &height);
+    return txAlphaBlend(txDC(), xDest, yDest, (double)(width), (double)(height), sourceImage, xSource, ySource);
+}
+
 #endif
