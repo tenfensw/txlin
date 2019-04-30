@@ -475,7 +475,7 @@ inline COLORREF txGetPixel (double x, double y, HDC dc = txDC()) {
     Uint8 red;
     Uint8 green;
     Uint8 blue;
-    SDL_GetRGB(pixelRaw, nullptr, &red, &green, &blue);
+    SDL_GetRGB(pixelRaw, SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->format, &red, &green, &blue);
     result.r = (int)(red);
     result.g = (int)(green);
     result.b = (int)(blue);
