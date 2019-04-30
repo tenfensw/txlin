@@ -1177,4 +1177,25 @@ inline bool txUnlock() {
     return false;
 }
 
+inline bool txSaveImage(const char* filename, HDC dc = txDC()) {
+    if (dc == nullptr)
+        return false;
+    return (SDL_SaveBMP(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow())), filename) == 0);
+}
+
+inline HDC txLoadImage(const char* filename, unsigned imageFlags = 0, unsigned loadFlags = 0) {
+    (void)(imageFlags);
+    (void)(loadFlags);
+    if (filename == nullptr)
+        return nullptr;
+    return (SDL_CreateSoftwareRenderer(SDL_LoadBMP(filename)));
+}
+
+inline bool txDeleteDC(HDC dc) {
+    if (dc == nullptr)
+        return false;
+    SDL_DestroyRenderer(dc);
+    return true;
+}
+
 #endif
