@@ -25,3 +25,5 @@ It's easy. Just replace ``#include "TXLib.h"`` with ``#include "TXLin.h"`` and y
 
 ## Documentation
 TXLin's API is mostly the same as in TXLib, so you can read TXLib documentation here: http://storage.ded32.net.ru/Lib/TX/TXUpdate/Doc/HTML.ru/index.htm
+
+There are still differences between TXLin and TXLib. See http://gitlab.com/timkoi/txlin/blob/master/porting-guide.md for more info.
