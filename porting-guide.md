@@ -17,10 +17,10 @@ TXLib defines a special macro ``THIS_IS_TXLIN``. You can check for its presence 
 ```
 #ifdef THIS_IS_TXLIN
 txSetConsoleAttr(TX_LIGHTGREEN);
-printf("You use Linux or macOS. I like both of these operating systems.\n");
+printf("You use TXLin on Linux or macOS. I like both of these operating systems.\n");
 #else
 txSetConsoleAttr(TX_RED);
-printf("You use Windows. I prefer macOS over Windows.\n")
+printf("You use TXLib on Windows. I prefer macOS over Windows.\n")
 #endif
 ```
 
