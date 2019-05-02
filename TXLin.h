@@ -162,6 +162,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define TA_LEFT 3
 #define TA_RIGHT 4
 #define TA_CENTER 5
+#define TA_TOP 6
 
 #define SND_ASYNC 80
 #define SND_SYNC 81
@@ -170,11 +171,13 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define SND_APPLICATION 84
 #define SND_NODEFAULT -1
 
-#ifndef TXLIN_TEXTSET_MAXWIDTH
-#define TXLIN_TEXTSET_MAXWIDTH 6
+#ifdef TXLIN_TEXTSET_MAXWIDTH
+#undef TXLIN_TEXTSET_MAXWIDTH
+#warning "TXLIN_TEXTSET_MAXWIDTH and TXLIN_TEXTSET_MAXHEIGHT are now ignored as now txSelectFont works properly"
 #endif
-#ifndef TXLIN_TEXTSET_MAXHEIGHT
-#define TXLIN_TEXTSET_MAXHEIGHT 6
+#ifdef TXLIN_TEXTSET_MAXHEIGHT
+#undef TXLIN_TEXTSET_MAXHEIGHT
+#warning "TXLIN_TEXTSET_MAXWIDTH and TXLIN_TEXTSET_MAXHEIGHT are now ignored as now txSelectFont works properly"
 #endif
 #define TXLIN_TEXTSET_HALFWIDTH (TXLIN_TEXTSET_MAXWIDTH / 2)
 #define TXLIN_TEXTSET_HALFHEIGHT (TXLIN_TEXTSET_MAXHEIGHT / 2)
@@ -213,6 +216,8 @@ static bool txLinUnportableHasInitializedTXLinInThisContext = false;
 static HWND txLinUnportableRecentlyCreatedWindow = -1;
 static unsigned txLinUnportableLastTerminalColor = 0x07;
 static bool txLinUnportableAutomaticWindowUpdates = true;
+static int TXLIN_TEXTSET_MAXWIDTH = 6;
+static int TXLIN_TEXTSET_MAXHEIGHT = 6;
 
 inline HDC txDC();
 inline HWND txWindow();
@@ -823,18 +828,21 @@ inline bool txTextOut(double x, double y, const char* text, HDC dc = txDC()) {
 
 inline HFONT txSelectFont (const char* name, double sizeY, HDC dc = txDC()) {
     (void)(dc);
-    (void)(sizeY);
     (void)(name);
-    TXLIN_WARNING(std::string("txSelectFont(const char* name, double sizeY, HDC dc) was added to TXLin for source compatibility purposes. It actually does nothing, because TXLin uses its own monolithic font engine rather than FontConfig. Thus, the font \"" + std::string(name) + "\" is not available."));
+    TXLIN_TEXTSET_MAXWIDTH = ((int)(sizeY) / 2);
+    if (TXLIN_TEXTSET_MAXWIDTH < 4)
+        TXLIN_TEXTSET_MAXWIDTH = 4;
+    TXLIN_TEXTSET_MAXHEIGHT = TXLIN_TEXTSET_MAXWIDTH;
+    TXLIN_WARNING(std::string("txSelectFont(const char* name, double sizeY, HDC dc) 'name' parameter is ignored, because TXLin uses its own monolithic font engine rather than FontConfig. Thus, the font \"" + std::string(name) + "\" is not available."));
     return nullptr;
 }
 
-unsigned txSetTextAlign (unsigned align = TA_LEFT, HDC dc = txDC()) {
+unsigned txSetTextAlign (unsigned align = TA_TOP, HDC dc = txDC()) {
     if (dc == nullptr)
         return 0;
     (void)(align);
     TXLIN_WARNING("txSetTextAlign(unsigned align, HDC dc) was added to TXLin for source compatibility purposes. It actually does nothing, because TXLib does not support text alignment at the moment.");
-    return TA_LEFT;
+    return TA_TOP;
 }
 
 inline void txTextCursor(bool value = true) {
