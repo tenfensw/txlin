@@ -44,7 +44,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define LOGFONT void
 #define SHORT bool
 
-#define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2014-04-26 00:00:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2019-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
 #define TXLIN_VERSIONNUM 0x174a0
 #ifdef TXLIN_MODULE
@@ -69,7 +69,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #pragma message("Windows is not supported by TXLin. And it will never be supported, because on Windows you should use TXLib.")
 #elif defined(__SUNPRO_CC)
 #error "Sun Studio is not supported by TXLin. It's too old, too buggy. Use GCC if you can."
-#else
 #define TXLIN_COMPILER "Unsupported C++ compiler"
 #define __TX_FUNCTION__ "(__TX_FUNCTION__ not supported with your compiler)"
 #warning "TXLin does not support your C++ compiler. Continue at your own risk!"
@@ -82,7 +81,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define THIS_IS_TXLIN
 
-// compatibility defines
+// compatibility defines (not really)
 #define _TX_VERSION TXLIN_VERSION
 #define _TX_AUTHOR TXLIN_AUTHOR
 #define _TX_VER TXLIN_VERSIONNUM
@@ -100,7 +99,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 // debug define
 #ifdef TXLIN_DEBUG
-#define DBGOUT std::cerr << "[TXLin/DEBUG/" << __LINE__ << "] "
+#define DBGOUT if (0) std::cerr << "[TXLin/DEBUG/" << __LINE__ << "] "
 #else
 #define DBGOUT std::stringstream()
 #endif
@@ -163,6 +162,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define TA_RIGHT 4
 #define TA_CENTER 5
 #define TA_TOP 6
+#define TA_BOTTOM 7
 
 #define SND_ASYNC 80
 #define SND_SYNC 81
@@ -212,15 +212,31 @@ struct COLORREF {
     int b;
 };
 
+inline COLORREF RGB (int red, int green, int blue);
+
 static bool txLinUnportableHasInitializedTXLinInThisContext = false;
 static HWND txLinUnportableRecentlyCreatedWindow = -1;
 static unsigned txLinUnportableLastTerminalColor = 0x07;
 static bool txLinUnportableAutomaticWindowUpdates = true;
 static int TXLIN_TEXTSET_MAXWIDTH = 6;
 static int TXLIN_TEXTSET_MAXHEIGHT = 6;
+static COLORREF txLinUnportableLastFillColor = TX_TRANSPARENT;
+static COLORREF txLinUnportableLastDrawColor = TX_WHITE;
+static unsigned txLinUnportableTextAlign = TA_BOTTOM;
+
+inline bool operator==(const COLORREF& c1, const COLORREF& c2) {
+    return (c1.r == c2.r && c1.g == c2.g && c1.b == c2.b);
+}
+
+inline bool operator!=(const COLORREF& c1, const COLORREF& c2) {
+    return (c1.r != c2.r || c1.g != c2.g || c1.b != c2.b);
+}
 
 inline HDC txDC();
 inline HWND txWindow();
+inline COLORREF txGetFillColor(HDC dc = txDC());
+inline bool txFloodFill (double x, double y, COLORREF color = txGetFillColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC(), COLORREF oldcolor = TX_TRANSPARENT);
+inline SIZE txGetTextExtent(const char* text, HDC dc = txDC());
 
 inline int txLinUnportableSDLProcessOneEvent() {
     SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
@@ -236,7 +252,7 @@ inline int txLinUnportableSDLProcessOneEvent() {
     return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_PROCESSED;
 }
 
-HWND txWindow() {
+inline HWND txWindow() {
     DBGINT(txLinUnportableRecentlyCreatedWindow);
     return txLinUnportableRecentlyCreatedWindow;
 }
@@ -310,7 +326,7 @@ HDC txDC() {
     SDL_Renderer* resultRenderer = SDL_GetRenderer(window);
     if (resultRenderer == nullptr) {
         DBGOUT << "regenerating renderer" << std::endl;
-#if !defined(TXLIN_NO_3D_ACCELERATION) && !defined(_TX_DESTROY_3D)
+#if !defined(TXLIN_NO_3D_ACCELERATION)
         resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 #else
         resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
@@ -380,6 +396,9 @@ HPEN txSetColor (COLORREF color, double thickness = 1, HDC dc = txDC()) {
     SDL_Renderer* rendererContext = dc;
     if (rendererContext == nullptr)
         return nullptr;
+    txLinUnportableLastDrawColor.r = color.r;
+    txLinUnportableLastDrawColor.g = color.g;
+    txLinUnportableLastDrawColor.b = color.b;
     SDL_SetRenderDrawColor(rendererContext, color.r, color.g, color.b, 0);
     return rendererContext;
 }
@@ -394,20 +413,17 @@ COLORREF txGetColor (HDC dc = txDC()) {
     COLORREF result = { 255, 255, 255 };
     if (dc == nullptr)
         return result;
-    Uint8 rBit, gBit, bBit;
-    SDL_GetRenderDrawColor(dc, &rBit, &gBit, &bBit, nullptr);
-    result.r = (int)(rBit);
-    result.g = (int)(gBit);
-    result.b = (int)(bBit);
+    result = txLinUnportableLastDrawColor;
     return result;
 }
 
 COLORREF txFillColor (double red, double green, double blue) {
-    return txColor(red, green, blue);
+    txLinUnportableLastFillColor = { (int)(red), (int)(green), (int)(blue) };
+    return txLinUnportableLastFillColor;
 } 
 
-COLORREF txGetFillColor (HDC dc = txDC()) {
-    return txGetColor(dc);
+COLORREF txGetFillColor (HDC dc) {
+    return txLinUnportableLastFillColor;
 }
 
 unsigned txExtractColor (COLORREF color, COLORREF component) {
@@ -415,21 +431,14 @@ unsigned txExtractColor (COLORREF color, COLORREF component) {
     return 0;
 }
 
-COLORREF txRGB2HSL (COLORREF rgbColor) {
-    // does not work yet
-    return rgbColor;
-}
-
-COLORREF txHSL2RGB (COLORREF hslColor) {
-    // does not work yet
-    return hslColor;
-}
-
 
 bool txClear (HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
+    COLORREF oldC = txGetColor();
+    txSetColor(txGetFillColor());
     SDL_RenderClear(dc);
+    txSetColor(oldC);
     return true;
 }
 
@@ -437,8 +446,10 @@ bool txClear (HDC dc = txDC()) {
 inline bool txSetPixel (double x, double y, COLORREF color = txGetColor(), HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
+    COLORREF oldC = txGetColor();
     txSetColor(color);
     SDL_RenderDrawPoint(dc, (int)(x), (int)(y));
+    txSetColor(oldC);
     return true;
 }
 
@@ -518,6 +529,8 @@ inline bool txRectangle (double x0, double y0, double x1, double y1, HDC dc = tx
     rectangle.w = txLinUnportableModule(x1 - x0);
     rectangle.h = txLinUnportableModule(y1 - y0);
     SDL_RenderDrawRect(dc, &rectangle);
+    if (txGetFillColor() != TX_TRANSPARENT)
+        txFloodFill(x0, y0, txGetFillColor(), FLOODFILLSURFACE, dc, txGetColor());
     if (txLinUnportableAutomaticWindowUpdates)
         txRedrawWindow(); 
     return true;
@@ -528,6 +541,8 @@ inline bool txPolygon (const POINT* points, int numPoints, HDC dc = txDC()) {
         return false;
     SDL_Point* sdlPoints = txLinUnportablePointCapsToSDL(points, numPoints);
     SDL_RenderDrawPoints(dc, sdlPoints, numPoints);
+    if (txGetFillColor() != TX_TRANSPARENT)
+        txFloodFill((double)(sdlPoints[0].x), (double)(sdlPoints[0].y), txGetFillColor(), FLOODFILLSURFACE, dc, txGetColor());
     free(sdlPoints);
     sdlPoints = nullptr;
     if (txLinUnportableAutomaticWindowUpdates)
@@ -566,13 +581,26 @@ inline bool txCircle (double x, double y, double r) {
             txSetPixel((int)(x) + ((-1) * ytmp), ((-1) * xtmp) + (int)(y));
         }
     }
+    if (txGetFillColor() != TX_TRANSPARENT)
+        txFloodFill((x + (r / 2)), (y + (r / 2)), txGetFillColor(), FLOODFILLSURFACE, txDC(), txGetColor());
     return true;
 }
 
-bool txFloodFill (double x, double y, COLORREF color = txGetColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC()) {
+bool txFloodFill (double x, double y, COLORREF color, DWORD mode, HDC dc, COLORREF oldcolor) {
     if (dc == nullptr)
         return false;
-    TXLIN_WARNINGNOTIMPLEMENTED();
+    COLORREF realOld = oldcolor;
+    if (realOld.r == -1 && realOld.g == -1 && realOld.b == -1)
+        realOld = txGetPixel(x, y, dc);
+    if (x >= txGetExtentX() || y >= txGetExtentY())
+        return false;
+    if (txGetPixel(x, y, dc) == realOld) {
+        txSetPixel(x, y, color, dc);
+        txFloodFill(x + 1, y, color, mode, dc, realOld);
+        txFloodFill(x, y + 1, color, mode, dc, realOld);
+        txFloodFill(x - 1, y, color, mode, dc, realOld);
+        txFloodFill(x, y - 1, color, mode, dc, realOld);
+    }
     return true;
 }
 
@@ -633,8 +661,9 @@ inline int txEnd() {
 
 inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char character) {
     char upperChar = (char)(toupper(character));
-    if (upperChar == ' ')
+    if (upperChar == ' ') {
         DBGOUT << "space" << std::endl;
+    }
     else if (upperChar == '.')
         txSetPixel((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
     else if (upperChar == '\n' || upperChar == '\r' || upperChar == '\0') {
@@ -815,9 +844,15 @@ inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char chara
     }
 }
 
-inline bool txTextOut(double x, double y, const char* text, HDC dc = txDC()) {
+inline bool txTextOut(double x, double y, const char* text, HDC dc = txDC(), bool ignoreTextAlignSettings = false) {
     if (dc == nullptr)
         return false;
+    if (ignoreTextAlignSettings == false) {
+        if (txLinUnportableTextAlign == TA_CENTER)
+            return txTextOut((x - (txGetTextExtent(text, dc).cx / 2)), y, text, dc, true);
+        else if (txLinUnportableTextAlign == TA_TOP)
+            return txTextOut(x, y - (txGetTextExtent(text, dc).cy), text, dc, true);
+    }
     int posx = (int)(x);
     for (int i = 0; i < strlen(text); i++) {
         txLinUnportableMonolithicCharacterSet(posx, (int)(y), text[i]);
@@ -837,12 +872,11 @@ inline HFONT txSelectFont (const char* name, double sizeY, HDC dc = txDC()) {
     return nullptr;
 }
 
-unsigned txSetTextAlign (unsigned align = TA_TOP, HDC dc = txDC()) {
+unsigned txSetTextAlign (unsigned align = TA_BOTTOM, HDC dc = txDC()) {
     if (dc == nullptr)
         return 0;
-    (void)(align);
-    TXLIN_WARNING("txSetTextAlign(unsigned align, HDC dc) was added to TXLin for source compatibility purposes. It actually does nothing, because TXLib does not support text alignment at the moment.");
-    return TA_TOP;
+    txLinUnportableTextAlign = align;
+    return TA_BOTTOM;
 }
 
 inline void txTextCursor(bool value = true) {
@@ -851,11 +885,11 @@ inline void txTextCursor(bool value = true) {
     TXLIN_WARNING("txTextCursor(bool value) was added to TXLin for source compatibility. It actually does nothing, because there is no easy and cross-platform way to turn off cursor blinking on both Linux and Mac OS X.");
 }
 
-inline HBRUSH txSetFillColor(COLORREF color, HDC dc = txDC()) {
+inline HBRUSH txSetFillColor(COLORREF color = TX_TRANSPARENT, HDC dc = txDC()) {
     if (dc == nullptr)
         return nullptr;
-    TXLIN_WARNING("txSetFillColor(COLORREF color, HDC dc) and txSetColor(COLORREF color, double thickness, HDC dc) do the same thing. In TXLib, there is no difference between the fill color and the foreground color.");
-    return txSetColor(color, 1, dc);
+    txFillColor(color.r, color.g, color.b);
+    return dc;
 }
 
 /*
@@ -875,57 +909,43 @@ inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC(
 */
 
 //inline bool txEllipse(double rx_dbl, double ry_dbl, double x_dbl, double y_dbl, HDC dc = txDC()) {
-inline bool txEllipse(double x_dbl, double y_dbl, double rx_dbl, double ry_dbl, HDC dc = txDC()) {
+inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, int width, int height, HDC dc = txDC()) {
     if (dc == nullptr)
         return false;
-    int xc = (int)(x_dbl);
-    int yc = (int)(y_dbl);
-    int rx = (int)(rx_dbl);
-    int ry = (int)(ry_dbl);
-    float dx = 0.0;
-    float dy = 0.0;
-    float d1 = 0.0;
-    float d2 = 0.0;
-    float x = 0.0;
-    float y = (float)(ry);
-    d1 = TXLIN_UNPORTABLEDEF_SQUARE(ry) - (TXLIN_UNPORTABLEDEF_SQUARE(rx) * ry) + (0.25 * TXLIN_UNPORTABLEDEF_SQUARE(rx));
-    dx = 2 * (TXLIN_UNPORTABLEDEF_SQUARE(ry) * x);
-    dy = 2 * (TXLIN_UNPORTABLEDEF_SQUARE(rx) * y);
-    while (dx < dy) {
-        txSetPixel((double)(x + xc), (double)(y + yc), txGetColor(dc), dc);
-        txSetPixel((double)((x * (-1)) + xc), (double)(y + yc), txGetColor(dc), dc);
-        txSetPixel((double)((x * (-1)) + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
-        txSetPixel((double)(x + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
-        x = x + 1.0;
-        dx = dx + (2 * (TXLIN_UNPORTABLEDEF_SQUARE(ry)));
-        if (d1 < 0)
-            d1 = d1 + dx + TXLIN_UNPORTABLEDEF_SQUARE(ry);
-        else {
-            y = y - 1.0;
-            dy = dy - (2 * (TXLIN_UNPORTABLEDEF_SQUARE(rx)));
-            d1 = d1 + dx - dy + TXLIN_UNPORTABLEDEF_SQUARE(ry);
-        }
-    }
-    d2 = (TXLIN_UNPORTABLEDEF_SQUARE(ry) * TXLIN_UNPORTABLEDEF_SQUARE(x + 0.5)) + (TXLIN_UNPORTABLEDEF_SQUARE(rx) * TXLIN_UNPORTABLEDEF_SQUARE(y - 1)) - (TXLIN_UNPORTABLEDEF_SQUARE(rx) * TXLIN_UNPORTABLEDEF_SQUARE(ry)); 
-    while (y > -1) {
-        txSetPixel((double)(x + xc), (double)(y + yc), txGetColor(dc), dc);
-        txSetPixel((double)((x * (-1)) + xc), (double)(y + yc), txGetColor(dc), dc);
-        txSetPixel((double)((x * (-1)) + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
-        txSetPixel((double)(x + xc), (double)((y * (-1)) + yc), txGetColor(dc), dc);
-        y = y - 1.0;
-        dy = dy - (2 * TXLIN_UNPORTABLEDEF_SQUARE(rx));
-        if (d2 > 0) 
-            d2 = d2 + TXLIN_UNPORTABLEDEF_SQUARE(rx) - dy;
-        else {
-            x = x + 1.0;
-            dx = dx + (2 * TXLIN_UNPORTABLEDEF_SQUARE(ry));
-            d2 = d2 + dx - dy + TXLIN_UNPORTABLEDEF_SQUARE(rx);
+    int hh = TXLIN_UNPORTABLEDEF_SQUARE(height);
+    int ww = TXLIN_UNPORTABLEDEF_SQUARE(width);
+    int hhww = hh * ww;
+    int xz = width;
+    int dx = 0;
+    for (int x = (width * (-1)); x <= width; x++)
+        txSetPixel((int)(x0) + x, y0, txGetColor(), dc);
+
+    // now do both halves at the same time, away from the diameter
+    for (int y = 1; y <= height; y++) {
+        int xa = xz - (dx - 1);  // try slopes of dx - 1 or more
+        for (; xa > 0; xa--)
+            if ((TXLIN_UNPORTABLEDEF_SQUARE(xa) * hh) + (TXLIN_UNPORTABLEDEF_SQUARE(y) * ww) <= hhww)
+                break;
+        dx = xz - xa;  // current approximation of the slope
+        xz = xa;
+
+        for (int x = (xz * (-1)); x <= xz; x++) {
+            txSetPixel((int)(x0) + x, (int)(y0) - y, txGetColor(), dc);
+            txSetPixel((int)(x0) + x, (int)(y0) + y, txGetColor(), dc);
         }
     }
     return true;
 }
 
-inline SIZE txGetTextExtent(const char* text, HDC dc = txDC()) {
+inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
+    int height = txLinUnportableModule((int)(y1 - y0));
+    int width = txLinUnportableModule((int)(x1 - x0));
+    int x0_new = (int)(x0) + (width / 2);
+    int y0_new = (int)(y0) + (height / 2);
+    return txLinUnportableEllipseClassicImplementation(x0_new, y0_new, width, height, dc);
+}
+
+SIZE txGetTextExtent(const char* text, HDC dc) {
     SIZE sizeOfText;
     sizeOfText.cx = 0.0;
     sizeOfText.cy = 0.0;
@@ -1022,7 +1042,8 @@ inline char* txInputBox(const char* text, const char* caption = "TXLin", const c
     return allocatedBufferReturned;
 }
 
-LOGFONT* txFontExist(const char* name) {
+inline LOGFONT* txFontExist(const char* name) {
+    (void)(name);
     return nullptr;
 }
 

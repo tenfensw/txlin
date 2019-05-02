@@ -63,7 +63,7 @@ int main() {
 ```
 
 ## txSqr and txPI are now just macroses
-txSqr function is actually a macros in TXLin. It points to a different define called ``TXLIN_UNPORTABLEDEF_SQUARE``.
+txSqr function is actually a macros in TXLin. It points to a different define called ``TXLIN_UNPORTABLEDEF_SQUARE``. And yes, it won't troll the user anymore.
 
 txPI is also a macros now and its value is just 3.14.
 
@@ -96,6 +96,9 @@ else {
 	free(favoriteColor); // free the memory allocated by the result string
 }
 ```
+
+## txHSL2RGB and txRGB2HSL are not available (txDialog is not available either)
+There is actually a reason for this. Both of these functions, as well as the txDialog class, are really rarely used.
 
 ## Notice for C++98 compilers users
 When building your program, right before the ``#include "TXLin.h"`` you'll have to add this line:

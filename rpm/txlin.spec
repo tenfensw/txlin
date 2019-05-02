@@ -41,7 +41,7 @@ echo "Cflags: -I/usr/include" >> txlin.pc
 %install
 mkdir -p $RPM_BUILD_ROOT/usr/include
 mkdir -p $RPM_BUILD_ROOT/usr/share/pkgconfig
-mkdir -p $RPM_BUILD_ROOT/etc/skel/.config/codeblocks
+mkdir -p $RPM_BUILD_ROOT/etc/skel/.config/codeblocks/UserTemplates
 mkdir -p $RPM_BUILD_ROOT/usr/share/txlin
 cd txlin
 cp TXLin.h $RPM_BUILD_ROOT/usr/include/TXLin.h
