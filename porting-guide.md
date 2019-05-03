@@ -198,6 +198,24 @@ else
 free(poemCtnt);
 ```
 
+## ``char* txSelectDocument(const char* text = "Please select a file to continue.", const char* filter = "*")``
+Prompts a user to select a file matching filter ``filter``. It returns a ``char*``, so you'll have to free the memory by yourself.
+
+Returns ``nullptr`` on failure. Otherwise, full path to the selected file is returned.
+
+Example:
+```
+char* textFilePath = txSelectDocument("Choose a text file to read aloud.", "*.txt");
+if (textFilePath == nullptr)
+	TX_ERROR("textFilePath is nullptr.");
+char* textReadFromFile = txTextDocument(textFilePath);
+if (textReadFromFile == nullptr)
+	TX_ERROR("Access is denied.");
+txSpeak(textReadFromFile);
+free(textReadFromFile);
+free(textFilePath);
+```
+
 ### ``const char* txCPUVendor()``
 Function that returns the name of the company that made your CPU.
 

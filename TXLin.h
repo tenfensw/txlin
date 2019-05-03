@@ -321,6 +321,57 @@ namespace TX {
         return txLinUnportableRecentlyCreatedWindow;
     }
 
+    inline char* txLinUnportableMacLinuxPath(const char* wpathstring) {
+        if (wpathstring == nullptr)
+            return nullptr;
+        char* result = (char*)(calloc(strlen(wpathstring), sizeof(char)));
+        for (int i = 0; i < strlen(wpathstring); i++) {
+            if (wpathstring[i] != '\\')
+                result[i] = wpathstring[i];
+            else
+                result[i] = '/';
+        }
+        result[strlen(wpathstring)] = '\0';
+        return result;
+    }
+
+    inline char* txTextDocument(const char* filename) {
+        char* filename2 = txLinUnportableMacLinuxPath(filename);
+        if (filename2 == nullptr) {
+            TXLIN_WARNING("filename specified as nullptr.")
+            return nullptr;
+        }
+        std::ifstream istream(filename2);
+        std::string str((std::istreambuf_iterator<char>(istream)), std::istreambuf_iterator<char>());
+        char* final = (char*)(calloc(str.size(), sizeof(char)));
+        strcpy(final, str.c_str());
+        return final;
+    }
+
+
+    inline char* txSelectDocument(const char* text = "Please select a file to continue.", const char* filter = "*") {
+        if (text == nullptr || filter == nullptr)
+            return nullptr;
+        std::string selectSocket = "/tmp/txlin-select.sock";
+#ifdef __APPLE__
+        if (std::system(std::string("osascript -e 'choose file with prompt \"" + std::string(text) + "\"' of type {\"" + std::string(filter) + "\"} 2>/dev/null | sed 's+:+/+g' | cut -d '/' -f2- > " + selectSocket).c_str()) != 0)
+#else
+        if (std::system(std::string("zenity --file-selection --file-filter=\"" + std::string(filter) + "\" > " + selectSocket).c_str()) != 0)
+#endif
+            return nullptr;
+        char* resultingText = txTextDocument(selectSocket.c_str());
+#ifdef __APPLE__
+        std::string resultingTextMacOpt = resultingText;
+        free(resultingText);
+        resultingText = (char*)(calloc(resultingTextMacOpt.size() + 1, sizeof(char)));
+        resultingTextMacOpt = '/' + resultingTextMacOpt;
+        strcpy(resultingText, resultingTextMacOpt.c_str());
+#endif
+        if (resultingText[strlen(resultingText) - 1] == '\n')
+            resultingText[strlen(resultingText) - 1] = '\0';
+        return resultingText;
+    }
+
     inline SDL_Point* txLinUnportablePointCapsToSDL(const POINT* points, int pointsCount) {
         SDL_Point* pointsFinal = (SDL_Point*)(calloc(pointsCount, sizeof(SDL_Point)));
         for (int i = 0; i < pointsCount; i++) {
@@ -400,19 +451,26 @@ namespace TX {
 #endif
     }
 
+    inline double txSleep(double time = 0) {
+        SDL_Delay(time);
+        return time;
+    }
+
     inline bool txSpeak(const char* stringToSay) {
         if (stringToSay == nullptr)
             return false;
 #ifdef __APPLE__
-        return (std::system(std::string("say -v Daniel '" + std::string(stringToSay) + '\'').c_str()) == 0);
+        bool result = (std::system(std::string("say -v Daniel '" + std::string(stringToSay) + "'").c_str()) == 0);
 #else
+        bool result = false;
         if (std::system("command -v espeak > /dev/null 2>&1") == 0)
-            return (std::system(std::string("espeak '" + std::string(stringToSay) + '\'').c_str()) == 0);
+            result = (std::system(std::string("espeak '" + std::string(stringToSay) + "'").c_str()) == 0);
         else if (std::system("command -v festival > /dev/null 2>&1") == 0)
-            return (std::system(std::string("echo '" + std::string(stringToSay) + "' | festival --tts").c_str()) == 0);
-        TXLIN_WARNING("No TTS engines are installed on your computer. Please install espeak or festival.");
-        return false;
+            result = (std::system(std::string("echo '" + std::string(stringToSay) + "' | festival --tts").c_str()) == 0);
+        else
+            TXLIN_WARNING("No TTS engines are installed on your computer. Please install espeak or festival.");
 #endif
+        return result;
     }
 
     inline const char* txCPUVendor() {
@@ -1152,11 +1210,6 @@ namespace TX {
         return txGetTextExtent(text, dc).cx;
     }
 
-    inline double txSleep(double time = 0) {
-        SDL_Delay(time);
-        return time;
-    }
-
     inline double txQueryPerformance() {
         TXLIN_WARNING("txQueryPerformance() was kept in TXLin for compatibility purposes. It will always return a const value.");
         return 7.9;
@@ -1200,31 +1253,6 @@ namespace TX {
         }
         return (std::system(std::string(std::string("notify-send -u low '") + std::string(title) + std::string("' '") + std::string(format) + "'").c_str()) == 0);
     #endif
-    }
-
-    inline char* txLinUnportableMacLinuxPath(const char* wpathstring) {
-        if (wpathstring == nullptr)
-            return nullptr;
-        char* result = (char*)(calloc(strlen(wpathstring), sizeof(char)));
-        for (int i = 0; i < strlen(wpathstring); i++) {
-            if (wpathstring[i] != '\\')
-                result[i] = wpathstring[i];
-            else
-                result[i] = '/';
-        }
-        result[strlen(wpathstring)] = '\0';
-        return result;
-    }
-
-    inline char* txTextDocument(const char* filename) {
-        char* filename2 = txLinUnportableMacLinuxPath(filename);
-        if (filename2 == nullptr)
-            return nullptr;
-        std::ifstream istream(filename2);
-        std::string str((std::istreambuf_iterator<char>(istream)), std::istreambuf_iterator<char>());
-        char* final = (char*)(calloc(str.size(), sizeof(char)));
-        strcpy(final, str.c_str());
-        return final;
     }
 
     inline char* txPassword() {
