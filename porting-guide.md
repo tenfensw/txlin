@@ -24,6 +24,36 @@ printf("You use TXLib on Windows. I prefer macOS over Windows.\n")
 #endif
 ```
 
+## Use txSticky() to keep the window opened
+When you open a window in TXLib, it tends not to close until the user does so. However, this is not the case with TXLin. Due to SDL limitations, a function that imitates TXLib's "sticky window" functionality was added to TXLin. That function is ``txSticky()``. This function keeps the window open until the user clicks the close button or presses Command+Q (Alt+F4 on Linux) on his/her keyboard. If you do not add this function after you finish drawing everything on the drawing canvas, then you'll never see the resulting window and canvas.
+
+Here's a simple Hello world program in TXLin:
+```
+#include "TXLin.h"
+
+int main() {
+	txCreateWindow(320, 480);
+	txTextOut(6, 6, "Hello, TXLin!");
+	return 0;
+}
+```
+
+Now, if you compile and run this piece of code, you will see nothing happen on the screen. To actually see the window, we will add ``txSticky()`` after all our drawing operations, in this case, after ``txTextOut``:
+```
+#include "TXLin.h"
+
+int main() {
+	txCreateWindow(320, 480);
+	txTextOut(6, 6, "Hello, TXLin!");
+#ifdef THIS_IS_TXLIN // to avoid incompatibility with TXLib and TXLin
+	txSticky();
+#endif
+	return 0;
+}
+```
+
+Now you should see a window with the text "Hello, TXLin!" appear on your screen. It won't go away until you click the close button.
+
 ## Configurable and const static variables from TXLib are not available
 So if you try change one of them in your program and then try to compile it with TXLin, you will get an error. To fix that, wrap around the code that modifies these variables in an ``#ifndef THIS_IS_TXLIN`` block. For example:
 ```

@@ -79,6 +79,10 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define TXLIN_NO_3D_ACCELERATION 1
 #endif
 
+#ifdef TXLIN_OLDCOMPILER
+#define nullptr 0
+#endif
+
 #define THIS_IS_TXLIN
 
 // compatibility defines (not really)
@@ -418,7 +422,9 @@ COLORREF txGetColor (HDC dc = txDC()) {
 }
 
 COLORREF txFillColor (double red, double green, double blue) {
-    txLinUnportableLastFillColor = { (int)(red), (int)(green), (int)(blue) };
+    txLinUnportableLastFillColor.r = (int)(red);
+    txLinUnportableLastFillColor.g = (int)(green);
+    txLinUnportableLastFillColor.b = (int)(blue);
     return txLinUnportableLastFillColor;
 } 
 
@@ -581,8 +587,10 @@ inline bool txCircle (double x, double y, double r) {
             txSetPixel((int)(x) + ((-1) * ytmp), ((-1) * xtmp) + (int)(y));
         }
     }
+#ifdef TXLIN_NEEDTOFILLALLFIGURES
     if (txGetFillColor() != TX_TRANSPARENT)
         txFloodFill((x + (r / 2)), (y + (r / 2)), txGetFillColor(), FLOODFILLSURFACE, txDC(), txGetColor());
+#endif
     return true;
 }
 
@@ -936,6 +944,8 @@ inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, in
     }
     return true;
 }
+
+#define txSticky() txLinUnportableSDLEventLoop()
 
 inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
     int height = txLinUnportableModule((int)(y1 - y0));
