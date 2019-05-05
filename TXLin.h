@@ -69,6 +69,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #elif defined(__GNUC__)
 #define TXLIN_COMPILER "GNU C/C++ Compiler"
 #define __TX_FUNCTION__ __PRETTY_FUNCTION__
+#pragma GCC diagnostic ignored "-Wsign-compare"
 #elif defined(_MSC_VER)
 #pragma message("Windows is not supported by TXLin. And it will never be supported, because on Windows you should use TXLib.")
 #elif defined(__SUNPRO_CC)
@@ -81,13 +82,17 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #ifdef __APPLE__
 #define TXLIN_OPERATINGSYSTEM "Apple macOS"
-#define TXLIN_NO_3D_ACCELERATION 1
 #elif defined(__linux__)
 #define TXLIN_OPERATINGSYSTEM "Linux"
+#elif defined(__FreeBSD__)
+#define TXLIN_OPERATINGSYSTEM "FreeBSD"
+#define TXLIN_NO_CPU_DETECTION 1
 #else
 #define TXLIN_OPERATINGSYSTEM "Unsupported UNIX-like operating system"
+#define TXLIN_NO_CPU_DETECTION 1
 #warning "TXLin cannot detect your current operating system. Use at your own risk."
 #endif
+#define TXLIN_NO_3D_ACCELERATION 1
 
 #ifdef TXLIN_OLDCOMPILER
 #define nullptr 0
@@ -110,6 +115,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define VK_RIGHT SDL_SCANCODE_RIGHT
 #define VK_ESCAPE SDL_SCANCODE_ESCAPE
 #define VK_SHIFT SDL_SCANCODE_LSHIFT
+#define VK_SPACE SDL_SCANCODE_KP_SPACE
+
 
 // debug define
 #ifdef TXLIN_DEBUG
@@ -210,6 +217,24 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define TM_HAND SDL_SYSTEM_CURSOR_HAND
 #define TM_NONE (CURSORREF)(14)
 
+#define MB_ABORTRETRYIGNORE 0x00000002L
+#define MB_CANCELTRYCONTINUE 0x00000006L
+#define MB_OK 0x00000000L
+#define MB_OKCANCEL 0x00000001L
+#define MB_RETRYCANCEL 0x00000005L
+#define MB_YESNO 0x00000004L
+#define MB_YESNOCANCEL 0x00000003L
+
+#define IDABORT 3
+#define IDCANCEL 2
+#define IDCONTINUE 11
+#define IDIGNORE 5
+#define IDNO 7
+#define IDOK 1
+#define IDRETRY 4
+#define IDTRYAGAIN IDRETRY
+#define IDYES 6
+
 #define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
 
 #define ROUND(x) (int)(round((double)(x)))
@@ -237,6 +262,10 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #ifdef _TX_ALLOW_KILL_PARENT
 #warning "_TX_ALLOW_KILL_PARENT is ignored by TXLin."
+#endif
+
+#ifndef TXLIN_MACOS_VOICEOVERVOICE
+#define TXLIN_MACOS_VOICEOVERVOICE "Daniel"
 #endif
 
 struct POINT {
@@ -277,12 +306,15 @@ namespace TX {
     static COLORREF txLinUnportableLastFillColor = TX_TRANSPARENT;
     static COLORREF txLinUnportableLastDrawColor = TX_WHITE;
     static unsigned txLinUnportableTextAlign = TA_BOTTOM;
+    static bool txLinUnportableAllowExit = true;
 
     inline HDC txDC();
     inline HWND txWindow();
     inline COLORREF txGetFillColor(HDC dc = txDC());
     inline bool txFloodFill (double x, double y, COLORREF color = txGetFillColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC(), COLORREF oldcolor = TX_TRANSPARENT);
     inline SIZE txGetTextExtent(const char* text, HDC dc = txDC());
+    inline bool txClear(HDC dc = txDC());
+    inline HBRUSH txSetFillColor(COLORREF color = TX_TRANSPARENT, HDC dc = txDC());
 
     inline std::string txLinUnportableNumToCPlusPlusString(int num) {
         std::stringstream stream;
@@ -294,7 +326,7 @@ namespace TX {
         SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
         if (SDL_PollEvent(eventHandler) == 0)
             return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_NONE;
-        if (eventHandler->type == SDL_QUIT) {
+        if (eventHandler->type == SDL_QUIT && txLinUnportableAllowExit) {
             SDL_DestroyRenderer(txDC());
             SDL_DestroyWindow(SDL_GetWindowFromID(txWindow()));
             SDL_Quit();
@@ -335,6 +367,15 @@ namespace TX {
         return result;
     }
 
+    inline bool txGetClosable() {
+        return txLinUnportableAllowExit;
+    }
+
+    inline bool txSetClosable(bool value = true) {
+        txLinUnportableAllowExit = value;
+        return txLinUnportableAllowExit;
+    }
+
     inline char* txTextDocument(const char* filename) {
         char* filename2 = txLinUnportableMacLinuxPath(filename);
         if (filename2 == nullptr) {
@@ -348,6 +389,18 @@ namespace TX {
         return final;
     }
 
+    inline bool txWriteDocument(const char* contents, const char* filename2) {
+        if (filename2 == nullptr || contents == nullptr)
+            return false;
+        char* filename = txLinUnportableMacLinuxPath(filename2);
+        FILE* fileDescriptor = fopen(filename, "w");
+        if (fileDescriptor == nullptr)
+            return false;
+        fprintf(fileDescriptor, "%s\n", contents);
+        fclose(fileDescriptor);
+        free(filename);
+        return true;
+    }
 
     inline char* txSelectDocument(const char* text = "Please select a file to continue.", const char* filter = "*") {
         if (text == nullptr || filter == nullptr)
@@ -360,6 +413,7 @@ namespace TX {
 #endif
             return nullptr;
         char* resultingText = txTextDocument(selectSocket.c_str());
+        TXLIN_UNPORTABLEDEF_RMFILE(selectSocket.c_str());
 #ifdef __APPLE__
         std::string resultingTextMacOpt = resultingText;
         free(resultingText);
@@ -370,6 +424,15 @@ namespace TX {
         if (resultingText[strlen(resultingText) - 1] == '\n')
             resultingText[strlen(resultingText) - 1] = '\0';
         return resultingText;
+    }
+
+    inline bool txRemoveDocument(const char* filename2) {
+        if (filename2 == nullptr)
+            return false;
+        char* filename = txLinUnportableMacLinuxPath(filename2);
+        bool res = (TXLIN_UNPORTABLEDEF_RMFILE(filename) == 0);
+        free(filename);
+        return res;
     }
 
     inline SDL_Point* txLinUnportablePointCapsToSDL(const POINT* points, int pointsCount) {
@@ -426,10 +489,11 @@ namespace TX {
         }
         SDL_Window* window = SDL_CreateWindow("TXLin", x, y, (int)(sizeX), (int)(sizeY), SDL_WINDOW_SHOWN);
         txLinUnportableRecentlyCreatedWindow = SDL_GetWindowID(window);
+        txSetFillColor(TX_BLACK);
+        txClear(txDC());
         SDL_UpdateWindowSurface(window);
         SDL_ShowWindow(window);
         SDL_RaiseWindow(window);
-        SDL_SetWindowResizable(window, SDL_FALSE);
         SDL_Delay(500);
         DBGOUT << "Window shown" << std::endl;
         return txLinUnportableRecentlyCreatedWindow;
@@ -460,13 +524,13 @@ namespace TX {
         if (stringToSay == nullptr)
             return false;
 #ifdef __APPLE__
-        bool result = (std::system(std::string("say -v Daniel '" + std::string(stringToSay) + "'").c_str()) == 0);
+        bool result = (std::system(std::string("say -v " + std::string(TXLIN_MACOS_VOICEOVERVOICE) + " '" + std::string(stringToSay) + "'").c_str()) == 0);
 #else
         bool result = false;
-        if (std::system("command -v espeak > /dev/null 2>&1") == 0)
-            result = (std::system(std::string("espeak '" + std::string(stringToSay) + "'").c_str()) == 0);
-        else if (std::system("command -v festival > /dev/null 2>&1") == 0)
+        if (std::system("command -v festival > /dev/null 2>&1") == 0 && getenv("TXLIN_BROKENFESTIVAL") == nullptr)
             result = (std::system(std::string("echo '" + std::string(stringToSay) + "' | festival --tts").c_str()) == 0);
+        else if (std::system("command -v espeak > /dev/null 2>&1") == 0)
+            result = (std::system(std::string("espeak '" + std::string(stringToSay) + "'").c_str()) == 0);
         else
             TXLIN_WARNING("No TTS engines are installed on your computer. Please install espeak or festival.");
 #endif
@@ -484,8 +548,10 @@ namespace TX {
         else if (std::system("test `sysctl machdep.cpu.vendor | cut -d ':' -f2 | sed  's/ //g'` = \"VMwareVMware\"") == 0)
             return "VMware";
         return "IBM";
-#else
-        if (std::system("lscpu | grep Vendor | grep -q GenuineIntel") == 0)
+#elif !defined(TXLIN_NO_CPU_DETECTION)
+        if (std::system("lscpu | grep Vendor | grep -q \" lrpepyh vr\"") == 0 || std::system("command -v prlcc > /dev/null 2>&1") == 0)
+            return "Parallels";
+        else if (std::system("lscpu | grep Vendor | grep -q GenuineIntel") == 0)
             return "Intel";
         else if (std::system("lscpu | grep Vendor | grep -q AuthenticAMD") == 0)
             return "AMD";
@@ -493,8 +559,6 @@ namespace TX {
             return "VIA";
         else if (std::system("lscpu | grep Vendor | grep -q GenuineTMx86") == 0)
             return "Transmeta";
-        else if (std::system("lscpu | grep Vendor | grep -q \" lrpepyh vr\"") == 0)
-            return "Parallels";
         else if (std::system("lscpu | grep Vendor | grep -q VMwareVMware") == 0)
             return "VMware";
         else if (std::system("lscpu | grep Vendor | grep -q KVMKVMKVM") == 0 || std::system("lscpu | grep Vendor | grep -q \"bhyve bhyve \"") == 0)
@@ -502,8 +566,9 @@ namespace TX {
         else if (std::system("lscpu | grep Vendor | grep -q \"Microsoft Hv\"") == 0)
             return "Microsoft";
         return "Unknown";
-#endif
+#else
         return "Unknown";
+#endif
     }
 
     inline bool txSetDefaults(HDC dc = txDC()) {
@@ -640,7 +705,6 @@ namespace TX {
     }
 
     COLORREF txExtractColor (COLORREF color, COLORREF component) {
-        // does not work yet
         COLORREF resultingColor = color;
         resultingColor.r = resultingColor.r - component.r;
         resultingColor.g = resultingColor.g - component.g;
@@ -649,7 +713,7 @@ namespace TX {
     }
 
 
-    bool txClear (HDC dc = txDC()) {
+    bool txClear (HDC dc) {
         if (dc == nullptr)
             return false;
         COLORREF oldC = txGetColor();
@@ -840,7 +904,6 @@ namespace TX {
         for (int ypos = (int)(y); ypos < txGetExtentY(); ypos++) {
             vXPos.clear();
             std::vector<int> lineStart;
-            int lastxpos = 0;
             for (int xpos = (int)(x); xpos < txGetExtentX(); xpos++) {
                 if (txGetPixel(xpos, ypos, dc) == realOld)
                     vXPos.push_back(xpos);
@@ -1129,7 +1192,7 @@ namespace TX {
         TXLIN_WARNING("txTextCursor(bool value) was added to TXLin for source compatibility. It actually does nothing, because there is no easy and cross-platform way to turn off cursor blinking on both Linux and Mac OS X.");
     }
 
-    inline HBRUSH txSetFillColor(COLORREF color = TX_TRANSPARENT, HDC dc = txDC()) {
+    inline HBRUSH txSetFillColor(COLORREF color, HDC dc) {
         if (dc == nullptr)
             return nullptr;
         txFillColor(color.r, color.g, color.b);
@@ -1231,13 +1294,81 @@ namespace TX {
         return (int)(txMousePos().y);
     }
 
-    inline int txMessageBox(const char* text, const char* header = "TXLin", unsigned flags = 0) {
+    inline int txMessageBox(const char* text, const char* header = "TXLin", unsigned flags = MB_OK) {
         if (text == nullptr || header == nullptr)
-            return 1;
-        if (flags != 0)
-            TXLIN_WARNING("txMessageBox(const char* text, const char* header, unsigned flags) flags parameter is ignored because there are portability issues.");
-        return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, header, text, nullptr);
+            return IDCANCEL;
+#ifndef TXLIN_GNOMEMESSAGEBOXES
+        SDL_MessageBoxButtonData* buttons = (SDL_MessageBoxButtonData*)(calloc(3, sizeof(SDL_MessageBoxButtonData)));
+        int numbuttons = 0;
+        if (flags == MB_YESNO || flags == MB_YESNOCANCEL) {
+            numbuttons = 2;
+            buttons[0] = { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDNO, "No" };
+            buttons[1] = { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDYES, "Yes" };
+            if (flags == MB_YESNOCANCEL) {
+                numbuttons = 3;
+                buttons[2] = { 0, IDCANCEL, "Cancel" };
+            }
+        }
+        else if (flags == MB_RETRYCANCEL) {
+            numbuttons = 2;
+            buttons[0] = { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDRETRY, "Retry" };
+            buttons[1] = { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDCANCEL, "Cancel" };
+        }
+        else if (flags == MB_CANCELTRYCONTINUE) {
+            numbuttons = 3;
+            buttons[0] = { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDCANCEL, "Cancel" };
+            buttons[1] = { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDTRYAGAIN, "Try again" };
+            buttons[2] = { 0, IDCONTINUE, "Continue" };
+        }
+        else if (flags == MB_ABORTRETRYIGNORE) {
+            numbuttons = 3;
+            buttons[0] = { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDABORT, "Abort" };
+            buttons[1] = { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDRETRY, "Retry" };
+            buttons[2] = { 0, IDIGNORE, "Ignore" };
+        }
+        else {
+            numbuttons = 1;
+            buttons[0] = { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDOK, "OK" };
+            if (flags == MB_OKCANCEL) {
+                numbuttons = 2;
+                buttons[1] = { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDCANCEL, "Cancel" };
+            }
+        }
+        SDL_MessageBoxColorScheme mbColors = {{ { 105, 105, 105 },
+                                               { 255, 255, 255 },
+                                               { 0, 0, 0 },
+                                               { 128, 128, 128 },
+                                               { 112, 128, 144 } 
+                                            }};
+        SDL_MessageBoxData mbData = { 0, SDL_GetWindowFromID(txWindow()), header, text, numbuttons, buttons, &mbColors };
+        int resultingButton = IDCANCEL;
+        SDL_ShowMessageBox(&mbData, &resultingButton);
+#else
+# ifdef __APPLE__
+# error "TXLIN_GNOMEMESSAGEBOXES is not supported on macOS, because... well, there is no GNOME on macOS. It is only available on Linux!"
+# else
+# warning "This define (TXLIN_GNOMEMESSAGEBOXES) was provided so that people with broken SDL_ShowMessageBox function (or people, who use Wayland) could still work with message boxes. Only MB_OK and MB_YESNO are supported. Use at your own risk!"
+# endif
+        int resultingButton = IDCANCEL;
+        if (flags == MB_YESNO) {
+            if (std::system(std::string("zenity --question --text=\"" + std::string(text) + '\"').c_str()) == 0)
+                resultingButton = IDYES;
+            else
+                resultingButton = IDNO;
+        }
+        else if (flags == MB_OK) {
+            std::system(std::string("zenity --info --text=\"" + std::string(text) + '\"').c_str());
+            resultingButton = IDOK;
+        }
+#endif
+        return resultingButton;
+        //if (flags != 0)
+        //    TXLIN_WARNING("txMessageBox(const char* text, const char* header, unsigned flags) flags parameter is ignored because there are portability issues.");
+        //return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, header, text, nullptr);
+
     }
+
+    #define MessageBox(hwndSpec, text, title, flags) txMessageBox(text, title, flags)
 
     inline bool txNotifyIcon(unsigned flags, const char* title, const char* format, ...) {
         if (title == nullptr || format == nullptr)
@@ -1325,7 +1456,7 @@ namespace TX {
     inline LOGFONT* txFontExist(const char* name) {
         (void)(name);
         return nullptr;
-    }
+    } 
 
     /*
     inline int txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
@@ -1518,7 +1649,6 @@ namespace TX {
     inline bool txBitBlt(HDC destImage, double xDest, double yDest, double width = 0.0, double height = 0.0, HDC sourceImage = txDC(), double xSource = 0.0, double ySource = 0.0) {
         if (sourceImage == nullptr || destImage == nullptr)
             return false;
-        TX_ERROR("This function is currently unavailable.");
         int kickstartSourceX = (int)(xSource);
         int kickstartSourceY = (int)(ySource);
         int kickstartDestX = (int)(xDest);
@@ -1550,6 +1680,50 @@ namespace TX {
             return false;
         (void)(transColor);
         return txBitBlt(destImage, xDest, yDest, width, height, sourceImage, xSource, ySource);
+    }
+
+    inline COLORREF txColorPicker() {
+        std::string socketSave = "/tmp/txlin-color.sock";
+#ifdef __APPLE__
+        if (std::system(std::string("osascript -e 'tell application \"Finder\"' -e 'activate' -e 'choose color' -e 'end tell' > " + socketSave).c_str()) != 0)
+#else
+        if (std::system(std::string("zenity --color-selection > " + socketSave).c_str()) != 0)
+#endif
+            return TX_WHITE;
+        char* colorCString = txTextDocument(socketSave.c_str());
+        if (colorCString == nullptr)
+            return TX_WHITE;
+        std::string colorString = colorCString;
+        free(colorCString);
+        std::string firstColorStr = "255";
+        std::string secondColorStr = "255";
+        std::string thirdColorStr = "255";
+        int iterator_macosx = 0;
+        std::string outStr_macosx = "";
+        for (int times = 1; times <= 3; times++) {
+            while (iterator_macosx < colorString.size() && colorString[iterator_macosx] != ',') {
+                if (colorString[iterator_macosx] != '{' && colorString[iterator_macosx] != ' ' && colorString[iterator_macosx] != ',' && colorString[iterator_macosx] != '\n' && colorString[iterator_macosx] != 'r' && colorString[iterator_macosx] != 'g' && colorString[iterator_macosx] != 'b')
+                    outStr_macosx = outStr_macosx = colorString[iterator_macosx];
+                iterator_macosx = iterator_macosx + 1;
+            }
+            if (times == 1)
+                firstColorStr = outStr_macosx;
+            else if (times == 2)
+                secondColorStr = outStr_macosx;
+            else
+                thirdColorStr = outStr_macosx;
+            outStr_macosx = "";
+        }
+        int firstColor = atoi(firstColorStr.c_str());
+        int secondColor = atoi(secondColorStr.c_str());
+        int thirdColor = atoi(thirdColorStr.c_str());
+#ifdef __APPLE__
+        firstColor = (firstColor / 65535) * 255;
+        secondColor = (secondColor / 65535) * 255;
+        thirdColor = (thirdColor / 65535) * 255;
+#endif
+        COLORREF result = { firstColor, secondColor, thirdColor };
+        return result;
     }
 
     inline bool txTransparentBlt(double xDest, double yDest, HDC sourceImage, COLORREF transColor = TX_BLACK, double xSource = 0.0, double ySource = 0.0) {

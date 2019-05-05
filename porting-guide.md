@@ -198,7 +198,26 @@ else
 free(poemCtnt);
 ```
 
-## ``char* txSelectDocument(const char* text = "Please select a file to continue.", const char* filter = "*")``
+### ``bool txRemoveDocument(const char* filename2)``
+Function that removes a file.
+
+Returns ``false`` if something goes wrong. Otherwise, returns ``true``.
+
+Example:
+```
+txTextOut(7, 7, "Uh oh, your cat is hungry.");
+txTextOut(7, 20, "Feed him with one of your files.");
+char* path = txSelectDocument("Pick one of your mice", "*.mouse");
+if (path == nullptr)
+	txTextOut(7, 33, "Your cat is still starving and you didn't feed him anything.");
+else if (txRemoveDocument(path) == false)
+	txTextOut(7, 33, "Your cat does not have permission to eat that mouse.");
+else
+	txTextOut(7, 33, "Thank you!");
+free(path);
+```
+
+### ``char* txSelectDocument(const char* text = "Please select a file to continue.", const char* filter = "*")``
 Prompts a user to select a file matching filter ``filter``. It returns a ``char*``, so you'll have to free the memory by yourself.
 
 Returns ``nullptr`` on failure. Otherwise, full path to the selected file is returned.
@@ -233,6 +252,8 @@ Example:
 ```
 if (txIsMacOS() && strcmp(txCPUVendor(), "AMD") == 0)
 	txMessageBox("You use a Hackintosh. You cheater.");
+else if (strcmp(txCPUVendor(), "Parallels") == 0 || strcmp(txCPUVendor(), "VMware") == 0)
+	txMessageBox("You use macOS in a virtual machine.");
 else
 	txMessageBox("You might be using a real Mac (or you just have an Intel-based PC with Hackintosh).");
 ```
