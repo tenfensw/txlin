@@ -16,6 +16,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
+
 #ifndef TXLIN_H
 #define TXLIN_H
 #include <SDL.h>
@@ -31,7 +32,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <cmath>
 #include <csignal>
 #include <assert.h>
-#include <cstdint>
 #include <string>
 #include <vector>
 #include <execinfo.h>
@@ -50,7 +50,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2019-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x174a0
+#define TXLIN_VERSIONNUM 0x174a0106
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -107,7 +107,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define __TX_COMPILER__ TXLIN_COMPILER
 #define meow bark TXLIN_WARNING("meow is deprecated, use bark instead.");
 #define bark ;
-#define txPI 3.14
+#define txPI 3.14159265358979323846
 
 #define VK_UP SDL_SCANCODE_UP
 #define VK_DOWN SDL_SCANCODE_DOWN
@@ -116,7 +116,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define VK_ESCAPE SDL_SCANCODE_ESCAPE
 #define VK_SHIFT SDL_SCANCODE_LSHIFT
 #define VK_SPACE SDL_SCANCODE_KP_SPACE
-
+#define VK_CONTROL SDL_SCANCODE_LCTRL
+#define VK_MENU SDL_SCANCODE_LALT
 
 // debug define
 #ifdef TXLIN_DEBUG
@@ -237,7 +238,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
 
-#define ROUND(x) (int)(round((double)(x)))
+#define ROUND(x) (round((double)(x)))
+#define SIZEARR(array) (int)(((double)(sizeof(array)) / (double)(sizeof(array[0]))))
 #ifndef TXLIN_DEBUG
 #define verify(expr) (expr)
 #else
@@ -259,6 +261,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
                              txLinUnportableMacLinuxBacktrace(); \
                              std::cerr << "=====================================================" << std::endl; \
                               }
+
+#define txRandom(b1, b2) (b1)
 
 #ifdef _TX_ALLOW_KILL_PARENT
 #warning "_TX_ALLOW_KILL_PARENT is ignored by TXLin."
@@ -284,6 +288,13 @@ struct COLORREF {
     int b;
 };
 
+struct RECT {
+    double left;
+    double top;
+    double right;
+    double bottom;
+};
+
 inline bool operator==(const COLORREF& c1, const COLORREF& c2) {
     return (c1.r == c2.r && c1.g == c2.g && c1.b == c2.b);
 }
@@ -307,6 +318,7 @@ namespace TX {
     static COLORREF txLinUnportableLastDrawColor = TX_WHITE;
     static unsigned txLinUnportableTextAlign = TA_BOTTOM;
     static bool txLinUnportableAllowExit = true;
+    static int txLinUnportableLineThickness = 1;
 
     inline HDC txDC();
     inline HWND txWindow();
@@ -315,6 +327,8 @@ namespace TX {
     inline SIZE txGetTextExtent(const char* text, HDC dc = txDC());
     inline bool txClear(HDC dc = txDC());
     inline HBRUSH txSetFillColor(COLORREF color = TX_TRANSPARENT, HDC dc = txDC());
+    inline char* txInputBox_nonNativeSDLRender(const char* text, const char* caption = "TXLin", const char* input = "", char mask = ' ');
+    inline bool txNotifyIcon_nonNativeSDLRender(const char* text, const char* title);
 
     inline std::string txLinUnportableNumToCPlusPlusString(int num) {
         std::stringstream stream;
@@ -376,16 +390,43 @@ namespace TX {
         return txLinUnportableAllowExit;
     }
 
+    inline bool txMacOSOlderThanMavericks() {
+#ifdef __APPLE__
+        return (std::system("test `defaults read loginwindow SystemVersionStampAsString | cut -d '.' -f2` -lt 9") == 0);
+#else
+        return false;
+#endif
+    }
+
+    inline int fsizeof(const char* filename) {
+        if (filename == nullptr)
+            return 0;
+        FILE* fileDescriptor = fopen(filename, "r");
+        if (fileDescriptor == nullptr)
+            return 0;
+        fseek(fileDescriptor, 0L, SEEK_END);
+        long out = ftell(fileDescriptor);
+        fclose(fileDescriptor);
+        return (int)(out);
+    }
+
     inline char* txTextDocument(const char* filename) {
         char* filename2 = txLinUnportableMacLinuxPath(filename);
         if (filename2 == nullptr) {
             TXLIN_WARNING("filename specified as nullptr.")
             return nullptr;
         }
-        std::ifstream istream(filename2);
-        std::string str((std::istreambuf_iterator<char>(istream)), std::istreambuf_iterator<char>());
-        char* final = (char*)(calloc(str.size(), sizeof(char)));
-        strcpy(final, str.c_str());
+        char* final = (char*)(calloc(fsizeof(filename) + 1, sizeof(char)));
+        FILE* fileDescriptor = fopen(filename, "r");
+        if (fileDescriptor == nullptr)
+            return nullptr;
+        int characterRepresentedAsInt = 0;
+        int loc = 0;
+        while ((characterRepresentedAsInt = getc(fileDescriptor)) != EOF) {
+            final[loc] = (char)(characterRepresentedAsInt);
+            loc = loc + 1;
+        }
+        fclose(fileDescriptor);
         return final;
     }
 
@@ -407,8 +448,12 @@ namespace TX {
             return nullptr;
         std::string selectSocket = "/tmp/txlin-select.sock";
 #ifdef __APPLE__
+        if (txMacOSOlderThanMavericks())
+            return txInputBox_nonNativeSDLRender(text, "TXLin Fallback File Selection Dialog");
         if (std::system(std::string("osascript -e 'choose file with prompt \"" + std::string(text) + "\"' of type {\"" + std::string(filter) + "\"} 2>/dev/null | sed 's+:+/+g' | cut -d '/' -f2- > " + selectSocket).c_str()) != 0)
 #else
+        if (std::system("which zenity > /dev/null 2>&1") != 0)
+            return txInputBox_nonNativeSDLRender(text, "TXLin Fallback File Selection Dialog");
         if (std::system(std::string("zenity --file-selection --file-filter=\"" + std::string(filter) + "\" > " + selectSocket).c_str()) != 0)
 #endif
             return nullptr;
@@ -434,6 +479,31 @@ namespace TX {
         free(filename);
         return res;
     }
+
+    inline unsigned long GetTickCount() {
+        return (unsigned long)(SDL_GetTicks());
+    }
+
+    #define Sleep(ms) txSleep(ms)
+
+    inline bool GetWindowRect(HWND window, RECT* where) {
+        if (where == nullptr)
+            return false;
+        int basex = 0;
+        int basey = 0;
+        int width = 0;
+        int height = 0;
+        SDL_Window* wOrig = SDL_GetWindowFromID(window);
+        if (wOrig == nullptr)
+            return false;
+        SDL_GetWindowPosition(wOrig, &basex, &basey);
+        SDL_GetWindowSize(wOrig, &width, &height);
+        where->left = basex;
+        where->top = basey;
+        where->right = basex + width;
+        where->bottom = basey + height;
+        return true;  
+    } 
 
     inline SDL_Point* txLinUnportablePointCapsToSDL(const POINT* points, int pointsCount) {
         SDL_Point* pointsFinal = (SDL_Point*)(calloc(pointsCount, sizeof(SDL_Point)));
@@ -515,7 +585,16 @@ namespace TX {
 #endif
     }
 
+    inline bool txIsFreeBSD() {
+#ifdef __FreeBSD__
+        return true;
+#else
+        return false;
+#endif
+    }
+
     inline double txSleep(double time = 0) {
+        txRedrawWindow();
         SDL_Delay(time);
         return time;
     }
@@ -524,7 +603,7 @@ namespace TX {
         if (stringToSay == nullptr)
             return false;
 #ifdef __APPLE__
-        bool result = (std::system(std::string("say -v " + std::string(TXLIN_MACOS_VOICEOVERVOICE) + " '" + std::string(stringToSay) + "'").c_str()) == 0);
+        bool result = (std::system(std::string("say -v \"" + std::string(TXLIN_MACOS_VOICEOVERVOICE) + "\" '" + std::string(stringToSay) + "'").c_str()) == 0);
 #else
         bool result = false;
         if (std::system("command -v festival > /dev/null 2>&1") == 0 && getenv("TXLIN_BROKENFESTIVAL") == nullptr)
@@ -577,10 +656,21 @@ namespace TX {
         if (rendererContext == nullptr)
             return false;
         SDL_SetRenderDrawColor(rendererContext, 255, 255, 255, 0);
-        //SDL_RenderClear(rendererContext);
+        txSetFillColor(TX_BLACK);
         return true;
     }
 
+    #define GetDC(hwndIn) SDL_GetRenderer(SDL_GetWindowFromID(hwndIn))
+    #define GetForegroundWindow() txWindow()
+    #define ReleaseDC(hwndIn, hdcIn) { (void)(hwndIn); SDL_DestroyRenderer(hdcIn); }
+
+    inline bool SetForegroundWindow(HWND hwndIn = txWindow()) {
+        SDL_Window* window = SDL_GetWindowFromID(hwndIn);
+        if (window == nullptr)
+            return false;
+        SDL_RaiseWindow(window);
+        return true;
+    }
 
     HDC txDC() {
         DBGOUT << "called txDC()" << std::endl;
@@ -590,7 +680,7 @@ namespace TX {
         SDL_Renderer* resultRenderer = SDL_GetRenderer(window);
         if (resultRenderer == nullptr) {
             DBGOUT << "regenerating renderer" << std::endl;
-    #if !defined(TXLIN_NO_3D_ACCELERATION)
+    #ifndef TXLIN_NO_3D_ACCELERATION
             resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     #else
             resultRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
@@ -668,7 +758,6 @@ namespace TX {
     }
 
     HPEN txSetColor (COLORREF color, double thickness = 1, HDC dc = txDC()) {
-        (void)(thickness);
         SDL_Renderer* rendererContext = dc;
         if (rendererContext == nullptr)
             return nullptr;
@@ -676,6 +765,7 @@ namespace TX {
         txLinUnportableLastDrawColor.g = color.g;
         txLinUnportableLastDrawColor.b = color.b;
         SDL_SetRenderDrawColor(rendererContext, color.r, color.g, color.b, 0);
+        txLinUnportableLineThickness = thickness;
         return rendererContext;
     }
 
@@ -712,7 +802,6 @@ namespace TX {
         return resultingColor;
     }
 
-
     bool txClear (HDC dc) {
         if (dc == nullptr)
             return false;
@@ -722,7 +811,6 @@ namespace TX {
         txSetColor(oldC);
         return true;
     }
-
 
     inline bool txSetPixel (double x, double y, COLORREF color = txGetColor(), HDC dc = txDC()) {
         if (dc == nullptr)
@@ -795,20 +883,17 @@ namespace TX {
             DBGOUT << "dc is nullptr, return false" << std::endl;
             return false;
         }
-        /*
-        DBGINT(x0);
-        DBGINT(y0);
-        DBGINT(x1);
-        DBGINT(y1);
-        DBGOUT << "SDL_RenderDrawLine" << std::endl;
-        */
         SDL_RenderDrawLine(dc, (int)(x0), (int)(y0), (int)(x1), (int)(y1));
-        //DBGOUT << "txRedrawWindow()" << std::endl;
+        if (txLinUnportableLineThickness > 1) {
+            for (int i = 1; i < txLinUnportableLineThickness; i++)
+                SDL_RenderDrawLine(dc, (int)(x0) + i, (int)(y0), (int)(x1) + i, (int)(y1));
+        }
         if (txLinUnportableAutomaticWindowUpdates)
             txRedrawWindow(); 
-        //DBGOUT << "return true;" << std::endl;
         return true;
     }
+
+
 
     inline bool txRectangle (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
         if (dc == nullptr)
@@ -830,7 +915,7 @@ namespace TX {
         if (dc == nullptr)
             return false;
         SDL_Point* sdlPoints = txLinUnportablePointCapsToSDL(points, numPoints);
-        SDL_RenderDrawPoints(dc, sdlPoints, numPoints);
+        SDL_RenderDrawLines(dc, sdlPoints, numPoints);
         if (txGetFillColor() != TX_TRANSPARENT)
             txFloodFill((double)(sdlPoints[0].x), (double)(sdlPoints[0].y), txGetFillColor(), FLOODFILLSURFACE, dc, txGetColor());
         free(sdlPoints);
@@ -838,7 +923,7 @@ namespace TX {
         if (txLinUnportableAutomaticWindowUpdates)
             txRedrawWindow(); 
         return true;
-    } 
+    }
 
     inline bool txCircle (double x, double y, double r) {
         int xtmp = (int)(r);
@@ -966,7 +1051,9 @@ namespace TX {
         return 1;
     }
 
-    inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char character) {
+    #define _txLine(v1, v2, v3, v4) txLine(v1, v2, v3, v4, dc)
+
+    inline void txLinUnportableMonolithicCharacterSet(int x, int y, const char character, HDC dc = txDC()) {
         char upperChar = (char)(toupper(character));
         if (upperChar == ' ') {
             DBGOUT << "space" << std::endl;
@@ -978,178 +1065,204 @@ namespace TX {
         }
         else if (upperChar == '!') {
             txLinUnportableMonolithicCharacterSet(x, y, '.');
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 2);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 2);
         }
         else if (upperChar == '+') {
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == ',')
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 2, (int)(x) - 1, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT + 2);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 2, (int)(x) - 1, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT + 2);
+        else if (upperChar == '*') {
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+        }
+        else if (upperChar == '[' || upperChar == ']') {
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            if (upperChar == '[')
+                _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            else
+                _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+        }
+        else if (upperChar == '\'')
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+        else if (upperChar == '"') {
+            txLinUnportableMonolithicCharacterSet(x, y, '\'');
+            txLinUnportableMonolithicCharacterSet(x + 2, y, '\'');
+        }
+        else if (upperChar == '?') {
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT - 3);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            txLinUnportableMonolithicCharacterSet(x, y, '.');
+        }
         else if (upperChar == 'A') {
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y));
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y));
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == 'B' || upperChar == '6' || upperChar == '9') {
             if (upperChar == '9')
-                txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+                _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
             else
-                txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            //txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+                _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            //_txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
             if (upperChar != '6')
-                txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+                _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'C') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'D') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'E' || upperChar == 'F' || upperChar == '3') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
             if (upperChar != 'F')
-                txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+                _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
             if (upperChar != '3')
-                txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+                _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
             else
-                txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+                _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'G') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == 'H') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == 'I')
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         else if (upperChar == 'J') {
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'K') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == 'L') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'M') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == 'N') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'P' || upperChar == 'R') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT + 2);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT + 2);
             if (upperChar == 'R')
-                txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+                _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'Q') {
             txCircle((int)(x), (int)(y), (int)(TXLIN_TEXTSET_HALFHEIGHT));
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'S' || upperChar == '5') {
             if (upperChar == 'S')
-                txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+                _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
             else {
-                txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + 1);
-                txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + 1, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+                _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + 1);
+                _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + 1, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
             }
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'T') {
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == 'U') {
-             txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-             txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-             txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+             _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+             _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+             _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == 'V') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == 'W') {
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXHEIGHT, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == 'X') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == 'Y') {
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == 'Z') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == '1') {
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
         }
         else if (upperChar == '2') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == '4') {
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x), (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else if (upperChar == '7') {
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
         }
         else if (upperChar == '8') {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
         }
         else {
-            txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
-            txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y));
+            _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x), (int)(y));
         }
     }
+
+    #undef _txLine
 
     inline bool txTextOut(double x, double y, const char* text, HDC dc = txDC(), bool ignoreTextAlignSettings = false) {
         if (dc == nullptr)
@@ -1160,13 +1273,33 @@ namespace TX {
             else if (txLinUnportableTextAlign == TA_TOP)
                 return txTextOut(x, y - (txGetTextExtent(text, dc).cy), text, dc, true);
         }
+        int oldThickness = txLinUnportableLineThickness;
+        txSetColor(txGetColor(), 1, dc);
         int posx = (int)(x);
+        int posy = (int)(y);
         for (int i = 0; i < strlen(text); i++) {
-            txLinUnportableMonolithicCharacterSet(posx, (int)(y), text[i]);
-            posx = posx + TXLIN_TEXTSET_MAXWIDTH + 3;
+            if (text[i] != '\n') {
+                txLinUnportableMonolithicCharacterSet(posx, posy, text[i], dc);
+                posx = posx + TXLIN_TEXTSET_MAXWIDTH + 3;
+            }
+            else {
+                posx = (int)(x);
+                posy = posy + TXLIN_TEXTSET_MAXHEIGHT + 3;
+            }
         }
+        txSetColor(txGetColor(), oldThickness, dc);
         return true;
     }
+
+    inline bool txDrawText(double x0, double y0, double x1, double y1, const char* text, unsigned format = 0, HDC dc = txDC()) {
+        if (dc == nullptr || text == nullptr || x0 > x1 || y0 > y1)
+            return false;
+        (void)(format);
+        (void)(x1);
+        (void)(y1);
+        return txTextOut(x0, y0, text, dc);
+    }
+ 
 
     inline HFONT txSelectFont (const char* name, double sizeY, HDC dc = txDC()) {
         (void)(dc);
@@ -1178,6 +1311,7 @@ namespace TX {
         TXLIN_WARNING(std::string("txSelectFont(const char* name, double sizeY, HDC dc) 'name' parameter is ignored, because TXLin uses its own monolithic font engine rather than FontConfig. Thus, the font \"" + std::string(name) + "\" is not available."));
         return nullptr;
     }
+
 
     unsigned txSetTextAlign (unsigned align = TA_BOTTOM, HDC dc = txDC()) {
         if (dc == nullptr)
@@ -1199,23 +1333,6 @@ namespace TX {
         return dc;
     }
 
-    /*
-    inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
-        if (dc == nullptr)
-            return false;
-        int width = txLinUnportableModule((int)(x1 - x0));
-        int height = txLinUnportableModule((int)(y1 - y0));
-        for (int y = (height * (-1)); y < (height + 1); y++) {
-            for (int x = (width * (-1)); x < (width + 1); x++) {
-                if ((TXLIN_UNPORTABLEDEF_SQUARE(x) * (TXLIN_UNPORTABLEDEF_SQUARE(height)) <= (TXLIN_UNPORTABLEDEF_SQUARE(width) * TXLIN_UNPORTABLEDEF_SQUARE(height))))
-                    txSetPixel((int)(x0) + x, (int)(y0) + y);
-            }
-        }
-        return true;
-    }
-    */
-
-    //inline bool txEllipse(double rx_dbl, double ry_dbl, double x_dbl, double y_dbl, HDC dc = txDC()) {
     inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, int width, int height, HDC dc = txDC()) {
         if (dc == nullptr)
             return false;
@@ -1244,7 +1361,7 @@ namespace TX {
         return true;
     }
 
-    #define txSticky() txLinUnportableSDLEventLoop()
+#define txSticky() txLinUnportableSDLEventLoop()
 
     inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
         int height = txLinUnportableModule((int)(y1 - y0));
@@ -1275,13 +1392,13 @@ namespace TX {
 
     inline double txQueryPerformance() {
         TXLIN_WARNING("txQueryPerformance() was kept in TXLin for compatibility purposes. It will always return a const value.");
-        return 7.9;
+        return 2.7;
     }
 
     inline POINT txMousePos() {
         int x = 1;
         int y = 1;
-        SDL_GetGlobalMouseState(&x, &y);
+        SDL_GetMouseState(&x, &y);
         POINT result = { (double)(x), (double)(y) };
         return result;
     }
@@ -1347,19 +1464,84 @@ namespace TX {
 # ifdef __APPLE__
 # error "TXLIN_GNOMEMESSAGEBOXES is not supported on macOS, because... well, there is no GNOME on macOS. It is only available on Linux!"
 # else
-# warning "This define (TXLIN_GNOMEMESSAGEBOXES) was provided so that people with broken SDL_ShowMessageBox function (or people, who use Wayland) could still work with message boxes. Only MB_OK and MB_YESNO are supported. Use at your own risk!"
+# warning "This define (TXLIN_GNOMEMESSAGEBOXES) was provided so that people with broken SDL_ShowMessageBox function (or people, who use Wayland or just want a native look-and-feel) could still work with message boxes. Not all message box types are supported. In fact, while KDE kdialog supports all of them, GNOME zenity barely supports MB_OK and MB_YESNO. Use at your own risk!"
 # endif
         int resultingButton = IDCANCEL;
-        if (flags == MB_YESNO) {
-            if (std::system(std::string("zenity --question --text=\"" + std::string(text) + '\"').c_str()) == 0)
-                resultingButton = IDYES;
-            else
-                resultingButton = IDNO;
+        if (std::system("which kdialog > /dev/null 2>&1") == 0) {
+            std::string kdeMsgBoxTemplate = "kdialog --title \"" + std::string(header) + "\"";
+            if (flags == MB_YESNO || flags == MB_OKCANCEL || flags == MB_RETRYCANCEL) {
+                std::string yesLabel = "Yes";
+                std::string noLabel = "No";
+                int yesReturns = IDYES;
+                int noReturns = IDNO;
+                if (flags == MB_OKCANCEL || flags == MB_RETRYCANCEL) {
+                    if (flags == MB_OKCANCEL) {
+                        yesLabel = "OK";
+                        yesReturns = IDOK;
+                    }
+                    else {
+                        yesLabel = "Retry";
+                        yesReturns = IDRETRY;
+                    }
+                    noLabel = "Cancel";
+                    noReturns = IDCANCEL;
+                }
+                if (std::system(std::string(kdeMsgBoxTemplate + " --yes-label \"" + yesLabel + "\" --no-label \"" + noLabel + "\" --yesno '" + std::string(text) + "'").c_str()) == 0)
+                    resultingButton = yesReturns;
+                else
+                    resultingButton = noReturns;
+            }
+            if (flags == MB_YESNOCANCEL || flags == MB_ABORTRETRYIGNORE || flags == MB_CANCELTRYCONTINUE) {
+                std::string yesLabel = "Yes";
+                std::string noLabel = "No";
+                std::string cancelLabel = "Cancel";
+                int yesReturns = IDYES;
+                int noReturns = IDNO;
+                int cancelReturns = IDCANCEL;
+                if (flags == MB_ABORTRETRYIGNORE) {
+                    yesLabel = "Retry";
+                    noLabel = "Abort";
+                    cancelLabel = "Ignore";
+                    yesReturns = IDRETRY;
+                    noReturns = IDABORT;
+                    cancelReturns = IDIGNORE;
+                }
+                else if (flags == MB_CANCELTRYCONTINUE) {
+                    yesLabel = "Proceed";
+                    noLabel = "Retry";
+                    yesReturns = IDCONTINUE;
+                    noReturns = IDRETRY;
+                }
+                int rcode = std::system(std::string(kdeMsgBoxTemplate + " --yes-label \"" + yesLabel + "\" --no-label \"" + noLabel + "\" --cancel-label \"" + cancelLabel + "\" --yesnocancel '" + std::string(text) + "'").c_str());
+                if (rcode == 0)
+                    resultingButton = yesReturns;
+                else if (rcode == 2)
+                    resultingButton = cancelReturns;
+                else
+                    resultingButton = noReturns;
+            }
+            else if (flags == MB_OK) {
+                std::system(std::string(kdeMsgBoxTemplate + " --msgbox '" + std::string(text) + "'").c_str());
+                resultingButton = IDOK;
+            }
         }
-        else if (flags == MB_OK) {
-            std::system(std::string("zenity --info --text=\"" + std::string(text) + '\"').c_str());
-            resultingButton = IDOK;
+        else if (std::system("which zenity > /dev/null 2>&1") == 0) {
+            if (flags == MB_YESNO) {
+                if (std::system(std::string("zenity --question --text=\"" + std::string(text) + '\"').c_str()) == 0)
+                    resultingButton = IDYES;
+                else
+                    resultingButton = IDNO;
+            }
+            else if (flags == MB_OK) {
+                std::system(std::string("zenity --info --text=\"" + std::string(text) + '\"').c_str());
+                resultingButton = IDOK;
+            }
         }
+        else {
+            std::cerr << "This program was linked with a version of TXLin that depends on third-party dialog-generating applications: GNOME zenity or KDE kdialog. None of these programs were detected on your computer. Please install one of them and restart the application (install GNOME zenity if you are unsure. On Ubuntu, install it with \"sudo apt-get install -y zenity\"). Or contact the developer of the application to relink with a different version of TXLin." << std::endl;
+            abort();
+        }
+
 #endif
         return resultingButton;
         //if (flags != 0)
@@ -1370,28 +1552,45 @@ namespace TX {
 
     #define MessageBox(hwndSpec, text, title, flags) txMessageBox(text, title, flags)
 
-    inline bool txNotifyIcon(unsigned flags, const char* title, const char* format, ...) {
-        if (title == nullptr || format == nullptr)
+    inline bool txNotifyIcon(unsigned flags, const char* title, const char* format2, ...) {
+        if (title == nullptr || format2 == nullptr)
             return false;
+        char* format = (char*)(calloc(strlen(format2) * 3, sizeof(char)));
+        va_list vList;
+        va_start(vList, format2);
+        vsprintf(format, format2, vList);
+        va_end(vList);
         if (flags != 0)
             TXLIN_WARNING("txNotifyIcon(unsigned flags, const char* title, const char* format, ...) flags parameter is ignored because there are portability issues.");
-    #ifdef __APPLE__
+#ifdef __APPLE__
+        if (txMacOSOlderThanMavericks())
+            return txNotifyIcon_nonNativeSDLRender(format, title);
         return (std::system(std::string(std::string("osascript -e 'display notification \"") + std::string(format) + std::string("\" with title \"") + std::string(title) + std::string("\"'")).c_str()) == 0);
-    #else
+#else
         if (std::system("which notify-send > /dev/null 2>&1") != 0) {
-            TXLIN_WARNINGWITHMESSAGEBOX("notify-send is not installed on your system, please install it so that notifications would work.");
-            return false;
+            if (std::system("which kdialog > /dev/null 2>&1") != 0)
+                return txNotifyIcon_nonNativeSDLRender(format, title);
+            else
+                return (std::system(std::string("kdialog --title '" + std::string(title) + "' --passivepopup '" + std::string(format) + "'").c_str()) == 0);
+
         }
-        return (std::system(std::string(std::string("notify-send -u low '") + std::string(title) + std::string("' '") + std::string(format) + "'").c_str()) == 0);
-    #endif
+        return (std::system(std::string(std::string("notify-send -u low '") + std::string(title) + std::string("' '") + std::string(format) + "' 5").c_str()) == 0);
+#endif
     }
 
     inline char* txPassword() {
         const char* saveSocket = "/tmp/txlin-passwordbox.sock";
 #ifdef __APPLE__
+        if (txMacOSOlderThanMavericks())
+            return txInputBox_nonNativeSDLRender("Type your password", "TXLin Password Dialog", "", '*');
         if (std::system(std::string("osascript -e 'display dialog \"Type your password\" default answer \"\" with hidden answer' > " + std::string(saveSocket)).c_str()) != 0)
 #else
-        if (std::system(std::string("zenity --password > " + std::string(saveSocket)).c_str()) != 0)
+        if (std::system("which kdialog > /dev/null 2>&1") != 0 && std::system("which zenity > /dev/null 2>&1") != 0)
+            return txInputBox_nonNativeSDLRender("Type your password", "TXLin Password Dialog", "", '*');
+        std::string passwdCmd = "zenity --password > " + std::string(saveSocket);
+        if (std::system("which kdialog > /dev/null 2>&1") == 0)
+            passwdCmd = "kdialog --title \"TXLin Password Dialog\" --password \"Type your password\" > " + std::string(saveSocket);
+        if (std::system(passwdCmd.c_str()) != 0)
 #endif
             return nullptr;
         char* readAnswerCString = txTextDocument(saveSocket);
@@ -1423,13 +1622,17 @@ namespace TX {
         if (text == nullptr || caption == nullptr || input == nullptr)
             return nullptr;
     #ifdef __APPLE__
-        std::system(std::string(std::string("osascript -e 'display dialog \"") + std::string(text) + std::string("\" default answer \"") + std::string(input) + std::string("\" with title \"") + std::string(caption) + std::string("\"' > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+        if (txMacOSOlderThanMavericks())
+            return txInputBox_nonNativeSDLRender(text, caption, input);
+        else
+            std::system(std::string(std::string("osascript -e 'display dialog \"") + std::string(text) + std::string("\" default answer \"") + std::string(input) + std::string("\" with title \"") + std::string(caption) + std::string("\"' > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
     #else
-        if (std::system("which zenity > /dev/null 2>&1") != 0) {
-            TXLIN_WARNINGWITHMESSAGEBOX("GNOME zenity is not installed on your system, please install it so that input boxes would work.");
-            return nullptr;
-        }
-        std::system(std::string(std::string("zenity --entry --text='") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("' --entry-text='") + std::string(input) + '\'' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+        if (std::system("which zenity > /dev/null 2>&1") != 0 && std::system("which kdialog > /dev/null 2>&1") != 0)
+            return txInputBox_nonNativeSDLRender(text, caption, input);
+        else if (std::system("which kdialog > /dev/null 2>&1") != 0)
+            std::system(std::string("kdialog --title \"" + std::string(caption) + "\" --inputbox '" + std::string(text) + "' '" + std::string(input) + "' > " + std::string(saveSocket) + " 2>/dev/null").c_str());
+        else
+            std::system(std::string(std::string("zenity --entry --text='") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("' --entry-text='") + std::string(input) + '\'' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
     #endif
         char* userAnsweredCString = txTextDocument(saveSocket);
         if (userAnsweredCString == nullptr)
@@ -1457,31 +1660,6 @@ namespace TX {
         (void)(name);
         return nullptr;
     } 
-
-    /*
-    inline int txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
-        int addCoef = 0;
-        if (isBackground)
-            addCoef = 10;
-        if (bitColor == 0x0)
-            return (31 + addCoef);
-        else if (bitColor == 0x1)
-            return (34 + addCoef);
-        else if (bitColor == 0x2)
-            return (32 + addCoef);
-        else if (bitColor == 0x3)
-            return (36 + addCoef);
-        else if (bitColor == 0x4 || bitColor == 0xC)
-            return (31 + addCoef);
-        else if (bitColor == 0x5 || bitColor == 0xD)
-            return (35 + addCoef);
-        else if (bitColor == 0x6 || bitColor == 0xE)
-            return (33 + addCoef);
-        else
-            return -1;
-
-    }
-    */
 
     inline std::string txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
         if (bitColor == 0x1)
@@ -1649,6 +1827,7 @@ namespace TX {
     inline bool txBitBlt(HDC destImage, double xDest, double yDest, double width = 0.0, double height = 0.0, HDC sourceImage = txDC(), double xSource = 0.0, double ySource = 0.0) {
         if (sourceImage == nullptr || destImage == nullptr)
             return false;
+        txBegin();
         int kickstartSourceX = (int)(xSource);
         int kickstartSourceY = (int)(ySource);
         int kickstartDestX = (int)(xDest);
@@ -1668,6 +1847,7 @@ namespace TX {
             if (kickstartDestY >= (int)(height))
                 break;
         }
+        txEnd();
         return true;
     }
 
@@ -1680,50 +1860,6 @@ namespace TX {
             return false;
         (void)(transColor);
         return txBitBlt(destImage, xDest, yDest, width, height, sourceImage, xSource, ySource);
-    }
-
-    inline COLORREF txColorPicker() {
-        std::string socketSave = "/tmp/txlin-color.sock";
-#ifdef __APPLE__
-        if (std::system(std::string("osascript -e 'tell application \"Finder\"' -e 'activate' -e 'choose color' -e 'end tell' > " + socketSave).c_str()) != 0)
-#else
-        if (std::system(std::string("zenity --color-selection > " + socketSave).c_str()) != 0)
-#endif
-            return TX_WHITE;
-        char* colorCString = txTextDocument(socketSave.c_str());
-        if (colorCString == nullptr)
-            return TX_WHITE;
-        std::string colorString = colorCString;
-        free(colorCString);
-        std::string firstColorStr = "255";
-        std::string secondColorStr = "255";
-        std::string thirdColorStr = "255";
-        int iterator_macosx = 0;
-        std::string outStr_macosx = "";
-        for (int times = 1; times <= 3; times++) {
-            while (iterator_macosx < colorString.size() && colorString[iterator_macosx] != ',') {
-                if (colorString[iterator_macosx] != '{' && colorString[iterator_macosx] != ' ' && colorString[iterator_macosx] != ',' && colorString[iterator_macosx] != '\n' && colorString[iterator_macosx] != 'r' && colorString[iterator_macosx] != 'g' && colorString[iterator_macosx] != 'b')
-                    outStr_macosx = outStr_macosx = colorString[iterator_macosx];
-                iterator_macosx = iterator_macosx + 1;
-            }
-            if (times == 1)
-                firstColorStr = outStr_macosx;
-            else if (times == 2)
-                secondColorStr = outStr_macosx;
-            else
-                thirdColorStr = outStr_macosx;
-            outStr_macosx = "";
-        }
-        int firstColor = atoi(firstColorStr.c_str());
-        int secondColor = atoi(secondColorStr.c_str());
-        int thirdColor = atoi(thirdColorStr.c_str());
-#ifdef __APPLE__
-        firstColor = (firstColor / 65535) * 255;
-        secondColor = (secondColor / 65535) * 255;
-        thirdColor = (thirdColor / 65535) * 255;
-#endif
-        COLORREF result = { firstColor, secondColor, thirdColor };
-        return result;
     }
 
     inline bool txTransparentBlt(double xDest, double yDest, HDC sourceImage, COLORREF transColor = TX_BLACK, double xSource = 0.0, double ySource = 0.0) {
@@ -1751,6 +1887,178 @@ namespace TX {
         SDL_GetRendererOutputSize(sourceImage, &width, &height);
         return txAlphaBlend(txDC(), xDest, yDest, (double)(width), (double)(height), sourceImage, xSource, ySource);
     }
+
+    #define _txTextOut(x, y, text, renderer) { COLORREF originalColor = txGetColor(); \
+                                               txSetColor(TX_BLACK); \
+                                               txTextOut(x, y, text, renderer); \
+                                               txSetColor(originalColor); }
+    #define _txInputBox_INTERNALBLITINPUTBOX() { SDL_SetRenderDrawColor(rendererWindow, systemThemeRed, systemThemeGreen, systemThemeBlue, 0); \
+                                                SDL_RenderClear(rendererWindow); \
+                                                SDL_SetRenderDrawColor(rendererWindow, 0, 0, 0, 0); \
+                                                _txTextOut(4, 4, text, rendererWindow); \
+                                                _txTextOut(4, 75, "Press \"ENTER\" when you're done.", rendererWindow); \
+                                                SDL_RenderDrawRect(rendererWindow, &textFieldRectangle); \
+                                            }
+    #define _txInputBox_INTERNALFILLSTRINGWITHCHARS(stringP, charV, charC) { \
+                                            stringP = (char*)(calloc(charC, sizeof(char))); \
+                                            for (int fc_tmp = 0; fc_tmp < charC; fc_tmp++) \
+                                                stringP[fc_tmp] = charV; \
+                                        }
+
+
+    bool txNotifyIcon_nonNativeSDLRender(const char* text, const char* title) {
+        SDL_DisplayMode* modeStruct = (SDL_DisplayMode*)(malloc(sizeof(SDL_DisplayMode)));
+        if (SDL_GetDesktopDisplayMode(0, modeStruct) != 0) {
+            free(modeStruct);
+            return false;
+        }
+        SDL_Window* notificationWindow = SDL_CreateWindow("TXLin Fallback Notification", SDL_WINDOWPOS_CENTERED, 20, 500, 60, SDL_WINDOW_SHOWN);
+        SDL_Renderer* rendererWindow = SDL_CreateRenderer(notificationWindow, -1, SDL_RENDERER_SOFTWARE);
+        SDL_SetRenderDrawColor(rendererWindow, 211, 211, 211, 0);
+#ifdef __APPLE__
+        SDL_SetRenderDrawColor(rendererWindow, 220, 220, 220, 0);
+#endif
+        SDL_RenderClear(rendererWindow);
+        SDL_SetRenderDrawColor(rendererWindow, 220, 20, 60, 0);
+        SDL_RenderDrawLine(rendererWindow, 6, 6, 6, 40);
+        SDL_RenderDrawLine(rendererWindow, 7, 6, 7, 40);
+        SDL_RenderDrawPoint(rendererWindow, 6, 55);
+        SDL_RenderDrawPoint(rendererWindow, 7, 55);
+        SDL_RenderDrawPoint(rendererWindow, 6, 56);
+        SDL_RenderDrawPoint(rendererWindow, 7, 56);
+        SDL_SetRenderDrawColor(rendererWindow, 0, 0, 0, 0);
+        SDL_UpdateWindowSurface(notificationWindow);
+        _txTextOut(26, 6, title, rendererWindow);
+        _txTextOut(26, 16, text, rendererWindow);
+        _txTextOut(26, 26, "This notification will disappear in 5 seconds.", rendererWindow);
+        SDL_UpdateWindowSurface(notificationWindow);
+        SDL_SetWindowBordered(notificationWindow, SDL_FALSE);
+        SDL_RaiseWindow(notificationWindow);
+        SDL_RaiseWindow(SDL_GetWindowFromID(txWindow()));
+        SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
+        bool exitFromLoop = false;
+        int kickstartTicks = SDL_GetTicks();
+        while (exitFromLoop == false) {
+            SDL_PollEvent(eventHandler);
+            if (SDL_GetTicks() - kickstartTicks >= 5000)
+                exitFromLoop = true;
+        }
+        SDL_DestroyRenderer(rendererWindow);
+        SDL_DestroyWindow(notificationWindow);
+        return true;
+    }
+
+    char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
+        SDL_Window* inputBoxWindow = SDL_CreateWindow("SDL Input Box", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 300, 100, SDL_WINDOW_SHOWN);
+        SDL_Renderer* rendererWindow = SDL_CreateRenderer(inputBoxWindow, -1, SDL_RENDERER_SOFTWARE);
+        if (rendererWindow == nullptr || inputBoxWindow == nullptr || text == nullptr || input == nullptr || caption == nullptr)
+            return nullptr;
+#ifdef __APPLE__
+        int systemThemeRed = 220;
+        int systemThemeGreen = 220;
+        int systemThemeBlue = 220;   
+#else
+        int systemThemeRed = 211;
+        int systemThemeGreen = 211;
+        int systemThemeBlue = 211;
+#endif
+        SDL_Rect textFieldRectangle = { 4, 30, 292, 13 };
+        _txInputBox_INTERNALBLITINPUTBOX();
+        SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
+        char* inputString = (char*)(calloc(300, sizeof(char)));
+        int lastChar = -1;
+        SDL_UpdateWindowSurface(inputBoxWindow);
+        SDL_SetWindowTitle(inputBoxWindow, caption);
+        SDL_Surface* storageSurface = SDL_CreateRGBSurface(0, 300, 100, SDL_GetWindowSurface(inputBoxWindow)->format->BitsPerPixel, SDL_GetWindowSurface(inputBoxWindow)->format->Rmask, SDL_GetWindowSurface(inputBoxWindow)->format->Gmask, SDL_GetWindowSurface(inputBoxWindow)->format->Bmask, SDL_GetWindowSurface(inputBoxWindow)->format->Amask);
+        if (storageSurface == nullptr)
+            return nullptr;
+        SDL_Rect backupBlitRect = { 0, 0, 300, 100 };
+        SDL_BlitSurface(SDL_GetWindowSurface(inputBoxWindow), NULL, storageSurface, &backupBlitRect);
+        if (strlen(input) > 0) {
+            strcpy(inputString, input);
+            _txTextOut(6, 32, inputString, rendererWindow);
+            lastChar = strlen(input) - 1;
+            SDL_UpdateWindowSurface(inputBoxWindow);
+        }
+        bool timeToQuit = false;
+        bool inCaps = false;
+        bool realCapsLock = true;
+        bool hasMask = (mask != ' ');
+        while (timeToQuit == false) {
+            while (SDL_PollEvent(eventHandler) != 0) {
+                if (eventHandler->type == SDL_KEYDOWN) {
+                    SDL_Keycode realKey = SDL_GetKeyFromScancode(eventHandler->key.keysym.scancode);
+                    if (realKey != SDLK_BACKSPACE && realKey != SDLK_RETURN) {
+                        char appendChar = (char)(*SDL_GetKeyName(realKey));
+                        if (realKey == SDLK_SPACE)
+                            appendChar = ' ';
+                        bool thisIsCapsLock = false;
+                        if (realKey == SDLK_RSHIFT || realKey == SDLK_LSHIFT) {
+                            thisIsCapsLock = true;
+                            realCapsLock = false;
+                        }
+                        else if (realKey == SDLK_CAPSLOCK) {
+                            thisIsCapsLock = true;
+                            realCapsLock = true;
+                        }
+                        if (thisIsCapsLock) {
+                            if (inCaps && realCapsLock)
+                                inCaps = false;
+                            else
+                                inCaps = true;
+                            break;
+                        }
+                        else {
+                            appendChar = (char)(tolower(appendChar));
+                            if (inCaps)
+                                appendChar = (char)(toupper(appendChar));
+                            if (realCapsLock == false) {
+                                realCapsLock = true;
+                                inCaps = false;
+                            }
+                            lastChar = lastChar + 1;
+                            inputString[lastChar] = appendChar;
+                            if (hasMask) {
+                                char* maskedString = nullptr;
+                                _txInputBox_INTERNALFILLSTRINGWITHCHARS(maskedString, mask, strlen(inputString));
+                                _txTextOut(6, 32, maskedString, rendererWindow);
+                                free(maskedString);
+                            }
+                            else
+                                _txTextOut(6, 32, inputString, rendererWindow);
+                            SDL_UpdateWindowSurface(inputBoxWindow);
+                        }
+                    }
+                    else if (realKey == SDLK_RETURN) {
+                        timeToQuit = true;
+                        break;
+                    }
+                    else {
+                        if (!(lastChar < 0)) {
+                            inputString[lastChar] = '\0';
+                            lastChar = lastChar - 1;
+                        }
+                        SDL_RenderClear(rendererWindow);
+                        _txInputBox_INTERNALBLITINPUTBOX();
+                        if (hasMask == false)
+                            _txTextOut(6, 32, inputString, rendererWindow);
+                        SDL_UpdateWindowSurface(inputBoxWindow);
+                    }
+                }
+            }
+        }
+        SDL_free(storageSurface);
+        SDL_DestroyRenderer(rendererWindow);
+        SDL_DestroyWindow(inputBoxWindow);
+        if (strlen(inputString) < 1)
+            return nullptr;
+        return inputString;
+    }
+
+    #undef _txTextOut
+    #undef _txInputBox_INTERNALBLITINPUTBOX
+    #undef _txInputBox_INTERNALFILLSTRINGWITHCHARS
+
 #ifndef TXLIN_NO_NAMESPACE
 }
 

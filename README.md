@@ -1,5 +1,5 @@
 # TXLin
-TXLin is a TXLib-compatible library that provides a simple way to draw graphics in C++ programs. Unlike TXLib, which uses GDI and, thus, works only on Windows, TXLin uses SDL2 and, as such, can work on Linux and Mac OS X.
+TXLin is a TXLib-compatible library that provides a simple way to draw graphics in C++ programs. Unlike TXLib, which uses GDI and, thus, works only on Windows, TXLin uses SDL2 and, as such, can work on Linux, macOS and even FreeBSD.
 
 If you are using Windows, then you should use TXLib: http://ded32.ru/
 
@@ -12,7 +12,11 @@ sudo apt install libsdl2-dev
 ```
 On Mageia/OpenMandriva Linux, this command will install SDL2 development files and headers:
 ```
-urpmi 'pkgconfig(sdl2)'
+sudo dnf install 'pkgconfig(sdl2)'
+```
+On macOS, you should install MacPorts from https://www.macports.org and then run:
+```
+sudo port install libsdl2
 ```
 
 Then, when linking your applications, you should add `sdl2-config --cflags --libs` to your compiler flags. For example:

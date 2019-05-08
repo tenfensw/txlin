@@ -69,14 +69,13 @@ _txLogName = "txlib_debuginfo.log";
 Using this macroses requires them to be reimplemented. However, they are planned to be added to a newer version of TXLin. 
 
 However, these macroses and defines are available in TXLin:
- - _TX_DESTROY_3D (it actually turns off 3D acceleration in SDL2)
  - 	__TX_COMPILER__ (reports the compiler used)
  -  __TX_FUNCTION__ (reports the name of the function from which this macros was used)
  - _TX_MODULE (reports the name of the module for debug purposes)
  - txGDI (but it does nothing, it just throws a warning that there is no GDI on Linux or macOS)
 
  The rest of the macroses (for now) have to be declared after the ``#include "TXLin.h"`` line, example:
- ```
+```
 #include "TXLin.h"
 #ifndef MAX // when it finally gets added to TXLin, do not redefine it
 #define MAX( a, b ) ( ((a) > (b))? (a) : (b) )
@@ -281,8 +280,17 @@ else
 	txMessageBox("This is not fair. You don't have TTS software installed. Maybe install espeak?");
 ```
 
+__FUN FACT:__ macOS users have an exclusive opportunity to change the VoiceOver voice used by txSpeak. To do that, right before ``#include "TXLin.h"`` add this line:
+```
+#define TXLIN_MACOS_VOICEOVERVOICE "<your preferred vocie>"
+```
+Obviously, you should replace "<your preferred voice>" with the voice that you want to use. If you are unsure about the voices installed on your Mac, open Terminal.app and run ``say -v ?`` to get a list of preinstalled voices.
+
 ### ``bool txIsLinux()``
 Returns ``true`` if TXLin is running on Linux or ``false`` if it is running in either macOS or other UNIX-like OS.
 
 ### ``bool txIsMacOS()``
 Returns ``true`` if TXLin is running on macOS or ``false`` if it is running in either Linux or other UNIX-like OS.
+
+### ``bool txIsFreeBSD()``
+Returns ``true`` if TXLin is running on FreeBSD or ``false`` if it is running in either macOS, Linux or other UNIX-like OS.
