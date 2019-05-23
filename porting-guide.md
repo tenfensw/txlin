@@ -65,34 +65,18 @@ So if you try change one of them in your program and then try to compile it with
 _txLogName = "txlib_debuginfo.log";
 #endif
 ```
-## MAX, MIN, asserted, ROUND and other macroses listed on http://storage.ded32.net.ru/Lib/TX/TXUpdate/Doc/HTML.ru/a00034.htm#ga0b75271f60823b3c49a42cdd3c196ce5 are unavailable in TXLin (though there are exceptions)
-Using this macroses requires them to be reimplemented. However, they are planned to be added to a newer version of TXLin. 
 
-However, these macroses and defines are available in TXLin:
- - 	__TX_COMPILER__ (reports the compiler used)
- -  __TX_FUNCTION__ (reports the name of the function from which this macros was used)
- - _TX_MODULE (reports the name of the module for debug purposes)
- - txGDI (but it does nothing, it just throws a warning that there is no GDI on Linux or macOS)
+## No deprecated API implemented
+Since TXLin is a modern library, none of the deprecated TXLib API was ported. If you have TXLib code that uses these functions and you want to port it over to TXLin, then implement these functions manually.
 
- The rest of the macroses (for now) have to be declared after the ``#include "TXLin.h"`` line, example:
-```
-#include "TXLin.h"
-#ifndef MAX // when it finally gets added to TXLin, do not redefine it
-#define MAX( a, b ) ( ((a) > (b))? (a) : (b) )
-#endif
-
-int main() {
-	txCreateWindow(60, 70);
-	txSetColor(TX_MAGENTA);
-	int number1 = 3;
-	int number2 = 4;
-	if (MAX(3, 4) == 4)
-		txTextOut(2, 2, "4 is bigger than 3, your compiler is good");
-	else
-		txTextOut(2, 2, "3 can't be bigger than 4, fix your compiler first!");
-	return 0;
-}
-```
+These functions are:
+- ``int random (int range)``
+- ``double random (double left, double right)``
+- ``bool In (Tx x, Ta a, Tb b)``
+- ``bool In (std::nomeow_t, Tx x, Ta a, Tb b)``
+- ``bool In (const POINT& pt, const RECT& rect)``
+- ``bool In (const COORD& pt, const SMALL_RECT& rect)``
+- ``std::nomeow_t`` is considered a deprecated type by TXLin and is not supported
 
 ## txSqr and txPI are now just macroses
 txSqr function is actually a macros in TXLin. It points to a different define called ``TXLIN_UNPORTABLEDEF_SQUARE``. And yes, it won't troll the user anymore.
@@ -282,9 +266,9 @@ else
 
 __FUN FACT:__ macOS users have an exclusive opportunity to change the VoiceOver voice used by txSpeak. To do that, right before ``#include "TXLin.h"`` add this line:
 ```
-#define TXLIN_MACOS_VOICEOVERVOICE "<your preferred vocie>"
+#define TXLIN_MACOS_VOICEOVERVOICE "[your preferred voice]"
 ```
-Obviously, you should replace "<your preferred voice>" with the voice that you want to use. If you are unsure about the voices installed on your Mac, open Terminal.app and run ``say -v ?`` to get a list of preinstalled voices.
+Obviously, you should replace "[your preferred voice]" with the voice that you want to use. If you are unsure about the voices installed on your Mac, open Terminal.app and run ``say -v ?`` to get a list of preinstalled voices.
 
 ### ``bool txIsLinux()``
 Returns ``true`` if TXLin is running on Linux or ``false`` if it is running in either macOS or other UNIX-like OS.
@@ -294,3 +278,55 @@ Returns ``true`` if TXLin is running on macOS or ``false`` if it is running in e
 
 ### ``bool txIsFreeBSD()``
 Returns ``true`` if TXLin is running on FreeBSD or ``false`` if it is running in either macOS, Linux or other UNIX-like OS.
+
+### ``txthread_t txSplitThread(void (*splitThreadFunc)(bool))``
+Function that runs a callback thread function specified by the argument ``splitThreadFunc`` in a seperate thread and returns the variable representing this thread. 
+
+The callback thread function must return ``void`` and accept only one argument - a ``bool`` variable. That ``bool`` variable is set to ``true`` if the experimental multithreading API is enabled and that function is running in a seperate thread. If that API is disable, the variable is set to ``false``. 
+
+Why is this important? Due to some limitations, you cannot create any new windows, surfaces, message boxes or use flood fill in a new thread. From a new thread, you can only use this subset of API:
+- ``txThreadLine`` (``txThreadLine_sepDC`` to specify the drawing context manually), ``txThreadSleep``
+- color-changing API (``txSetColor``, etc)
+- console API
+- sounds and mice API
+
+
+Example:
+```
+void threadMain(bool isRealThread) {
+	txThreadSleep(1000);
+	 if (isRealThread)
+	 	txTextOut(6, 6, "Hello from the second thread!");
+	 else
+	 	TX_ERROR("Multithreading API is disabled.");
+}
+
+int main() {
+	txCreateWindow(800, 600);
+	txClear();
+	txthread_t otherThread = txSplitThread(threadMain);
+	while (txThreadRunning(otherThread))
+		txLine(5, 5, rand() % 18, rand() % 18);
+	txTextOut(12, 6, "Hello from the first (main) thread!");
+	txSticky();
+	return 0;
+}
+```
+
+### ``bool txJoinThread(txthread_t thread)``
+Function that freezes the current thread while thread ``thread`` is running. 
+
+Returns ``true`` on success, ``false`` on fail.
+
+### ``bool txThreadRunning(txthread_t thread)``
+Returns ``true`` if thread ``thread`` is running. Otherwise, returns ``false``.
+
+### ``bool txStopThread(txthread_t thread)``
+Function that force stops thread ``thread``.
+
+Returns ``true`` on success. Otherwise, returns ``false``.
+
+### ``int txThreadSleep(unsigned int millisecs)``
+Function that freezes the thread for ``millisecs`` milliseconds. Unlike ``txSleep``, works inside threads created by ``txSplitThread``.
+
+Returns 0 on success, otherwise, -1 is returned.

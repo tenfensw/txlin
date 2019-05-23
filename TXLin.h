@@ -3,19 +3,9 @@ TXLin
 
 Copyright (c) 2018-2019, Tim K <timprogrammer@rambler.ru>
 
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+TXLin's licensing terms are different from other libraries. See
+LICENSE file in the source folder for more info.
 */
-
 
 #ifndef TXLIN_H
 #define TXLIN_H
@@ -35,6 +25,9 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <string>
 #include <vector>
 #include <execinfo.h>
+#ifdef TXLIN_PTHREAD
+#include <pthread.h>
+#endif
 
 #define HWND Uint32
 #define DWORD unsigned long
@@ -45,8 +38,11 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #define LONG unsigned long
 #define HBRUSH SDL_Renderer*
 #define LOGFONT void
-#define SHORT bool
+#define SHORT unsigned int
 #define CURSORREF SDL_SystemCursor
+#ifdef TXLIN_PTHREAD
+#define txthread_t pthread_t
+#endif
 
 #define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2019-04-26 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
@@ -238,12 +234,16 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #define txGDI(function) TXLIN_WARNING(std::string(std::string("txGDI does not work on Mac OS X or Linux, because it is a Windows-specific function. As such, ") + std::string(#function) + std::string(" won't be called.")).c_str());
 
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define ROUND(x) (round((double)(x)))
 #define SIZEARR(array) (int)(((double)(sizeof(array)) / (double)(sizeof(array[0]))))
 #ifndef TXLIN_DEBUG
 #define verify(expr) (expr)
+#define TX_DEBUG_ERROR(msg) (void)(msg)
 #else
 #define verify(expr) assert(expr)
+#define TX_DEBUG_ERROR(msg) TX_ERROR(msg)
 #endif
 #define _ ,
 #define txItoa(num) txLinUnportableNumToCPlusPlusString(num).c_str()
@@ -295,6 +295,18 @@ struct RECT {
     double bottom;
 };
 
+struct COORD {
+    unsigned int X;
+    unsigned int Y;
+};
+
+struct SMALL_RECT {
+    unsigned int Left;
+    unsigned int Top;
+    unsigned int Right;
+    unsigned int Bottom;
+};
+
 inline bool operator==(const COLORREF& c1, const COLORREF& c2) {
     return (c1.r == c2.r && c1.g == c2.g && c1.b == c2.b);
 }
@@ -323,12 +335,15 @@ namespace TX {
     inline HDC txDC();
     inline HWND txWindow();
     inline COLORREF txGetFillColor(HDC dc = txDC());
-    inline bool txFloodFill (double x, double y, COLORREF color = txGetFillColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC(), COLORREF oldcolor = TX_TRANSPARENT);
+    inline bool txFloodFill (double x, double y, COLORREF realOld = txGetFillColor(), DWORD mode = FLOODFILLSURFACE, HDC dc = txDC());
     inline SIZE txGetTextExtent(const char* text, HDC dc = txDC());
     inline bool txClear(HDC dc = txDC());
     inline HBRUSH txSetFillColor(COLORREF color = TX_TRANSPARENT, HDC dc = txDC());
     inline char* txInputBox_nonNativeSDLRender(const char* text, const char* caption = "TXLin", const char* input = "", char mask = ' ');
     inline bool txNotifyIcon_nonNativeSDLRender(const char* text, const char* title);
+    inline int txMessageBox(const char* text, const char* header = "TXLin", unsigned flags = MB_OK);
+    inline void txSetConsoleAttr(unsigned colors = 0x07);
+    inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC());
 
     inline std::string txLinUnportableNumToCPlusPlusString(int num) {
         std::stringstream stream;
@@ -430,16 +445,16 @@ namespace TX {
         return final;
     }
 
-    inline bool txWriteDocument(const char* contents, const char* filename2) {
-        if (filename2 == nullptr || contents == nullptr)
+    inline bool txWriteDocument(const char* contents, const char* filename) {
+        if (filename == nullptr || contents == nullptr)
             return false;
-        char* filename = txLinUnportableMacLinuxPath(filename2);
+
         FILE* fileDescriptor = fopen(filename, "w");
         if (fileDescriptor == nullptr)
             return false;
-        fprintf(fileDescriptor, "%s\n", contents);
+
+        fputs(contents, fileDescriptor);
         fclose(fileDescriptor);
-        free(filename);
         return true;
     }
 
@@ -543,9 +558,10 @@ namespace TX {
         return number;
     }
 
-    inline void txRedrawWindow() {
+    inline void txRedrawWindow(bool mtFunc = false) {
         SDL_UpdateWindowSurface(SDL_GetWindowFromID(txWindow()));
-        txLinUnportableSDLProcessOneEvent();
+        if (mtFunc == false)
+            txLinUnportableSDLProcessOneEvent();
     }
 
     inline HWND txCreateWindow(double sizeX, double sizeY, bool centered = true) {
@@ -611,7 +627,7 @@ namespace TX {
         else if (std::system("command -v espeak > /dev/null 2>&1") == 0)
             result = (std::system(std::string("espeak '" + std::string(stringToSay) + "'").c_str()) == 0);
         else
-            TXLIN_WARNING("No TTS engines are installed on your computer. Please install espeak or festival.");
+            TX_ERROR("No TTS engines are installed on your computer. Please install espeak or festival.");
 #endif
         return result;
     }
@@ -672,6 +688,7 @@ namespace TX {
         return true;
     }
 
+
     HDC txDC() {
         DBGOUT << "called txDC()" << std::endl;
         SDL_Window* window = SDL_GetWindowFromID(txWindow());
@@ -693,14 +710,14 @@ namespace TX {
     }
 
     inline RGBQUAD* txVideoMemory(HDC dc = txDC()) {
+        if (dc == nullptr)
+            return nullptr;
         return (RGBQUAD*)(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->pixels);
     }
-
 
     inline bool txOK() {
         return txLinUnportableHasInitializedTXLinInThisContext;
     }
-
 
     inline POINT txGetExtent (HDC dc = txDC()) {
         POINT result;
@@ -860,11 +877,13 @@ namespace TX {
         COLORREF result = { 255, 255, 255 };
         if (dc == nullptr)
             return result;
-        Uint32 pixelRaw = txLinUnportableGetPixel(SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow())), (int)(x), (int)(y));
+        SDL_Window* window = SDL_GetWindowFromID(txWindow());
+        SDL_Surface* wSurface = SDL_GetWindowSurface(window);
+        Uint32 pixelRaw = txLinUnportableGetPixel(wSurface, (int)(x), (int)(y));
         Uint8 red;
         Uint8 green;
         Uint8 blue;
-        SDL_GetRGB(pixelRaw, SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->format, &red, &green, &blue);
+        SDL_GetRGB(pixelRaw, wSurface->format, &red, &green, &blue);
         result.r = (int)(red);
         result.g = (int)(green);
         result.b = (int)(blue);
@@ -878,7 +897,7 @@ namespace TX {
         return doUpdate;
     }
 
-    inline bool txLine (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
+    inline bool txLine (double x0, double y0, double x1, double y1, HDC dc = txDC(), bool mtVer = false) {
         if (dc == nullptr) {
             DBGOUT << "dc is nullptr, return false" << std::endl;
             return false;
@@ -888,12 +907,10 @@ namespace TX {
             for (int i = 1; i < txLinUnportableLineThickness; i++)
                 SDL_RenderDrawLine(dc, (int)(x0) + i, (int)(y0), (int)(x1) + i, (int)(y1));
         }
-        if (txLinUnportableAutomaticWindowUpdates)
+        if (txLinUnportableAutomaticWindowUpdates && mtVer == false)
             txRedrawWindow(); 
         return true;
     }
-
-
 
     inline bool txRectangle (double x0, double y0, double x1, double y1, HDC dc = txDC()) {
         if (dc == nullptr)
@@ -905,7 +922,7 @@ namespace TX {
         rectangle.h = txLinUnportableModule(y1 - y0);
         SDL_RenderDrawRect(dc, &rectangle);
         if (txGetFillColor() != TX_TRANSPARENT)
-            txFloodFill(x0, y0, txGetFillColor(), FLOODFILLSURFACE, dc, txGetColor());
+            txFloodFill(x0, y0, txGetPixel(x0 + 1, y0 + 1, dc), FLOODFILLSURFACE, dc);
         if (txLinUnportableAutomaticWindowUpdates)
             txRedrawWindow(); 
         return true;
@@ -917,7 +934,7 @@ namespace TX {
         SDL_Point* sdlPoints = txLinUnportablePointCapsToSDL(points, numPoints);
         SDL_RenderDrawLines(dc, sdlPoints, numPoints);
         if (txGetFillColor() != TX_TRANSPARENT)
-            txFloodFill((double)(sdlPoints[0].x), (double)(sdlPoints[0].y), txGetFillColor(), FLOODFILLSURFACE, dc, txGetColor());
+            txFloodFill((double)(sdlPoints[0].x), (double)(sdlPoints[0].y), txGetFillColor(), FLOODFILLSURFACE, dc);
         free(sdlPoints);
         sdlPoints = nullptr;
         if (txLinUnportableAutomaticWindowUpdates)
@@ -925,50 +942,13 @@ namespace TX {
         return true;
     }
 
-    inline bool txCircle (double x, double y, double r) {
-        int xtmp = (int)(r);
-        int ytmp = 0;
-        txSetPixel((int)(x) + xtmp, (int)(y) + ytmp);
-        if ((int)(r) > 0) {
-            txSetPixel((int)(x) + xtmp, (ytmp * (-1)) + (int)(y));
-            txSetPixel((int)(x) + ytmp, xtmp + (int)(y));
-            txSetPixel((int)(x) + (ytmp * (-1)), xtmp + (int)(y));
-        }
-        int P = 1 - (int)(r);
-        while (xtmp > ytmp) {
-            ytmp = ytmp + 1;
-            if (P <= 0)
-                P = P + (2 * ytmp) + 1;
-            else {
-                xtmp = xtmp - 1;
-                P = P + (2 * ytmp) - (2 * xtmp) + 1;
-            }
-            if (xtmp < ytmp)
-                break;
-            txSetPixel((int)(x) + xtmp, ytmp + (int)(y));
-            txSetPixel((int)(x) + (xtmp * (-1)), ytmp + (int)(y));
-            txSetPixel((int)(x) + xtmp, (ytmp * (-1)) + (int)(y));
-            txSetPixel((int)(x) + (xtmp * (-1)), (ytmp * (-1)) + (int)(y));
-            if (xtmp != ytmp) {
-                txSetPixel((int)(x) + ytmp, xtmp + (int)(y));
-                txSetPixel((int)(x) + ((-1) * ytmp), xtmp + (int)(y));
-                txSetPixel((int)(x) + ytmp, ((-1) * xtmp) + (int)(y));
-                txSetPixel((int)(x) + ((-1) * ytmp), ((-1) * xtmp) + (int)(y));
-            }
-        }
-    #ifdef TXLIN_NEEDTOFILLALLFIGURES
-        if (txGetFillColor() != TX_TRANSPARENT)
-            txFloodFill((x + (r / 2)), (y + (r / 2)), txGetFillColor(), FLOODFILLSURFACE, txDC(), txGetColor());
-    #endif
-        return true;
+    inline bool txCircle (double x, double y, double r, HDC dc = txDC()) {
+        return txEllipse(x - (r / 2), y - (r / 2), x + (r / 2), y + (r / 2), dc);
     }
 
-    bool txFloodFill (double x, double y, COLORREF color, DWORD mode, HDC dc, COLORREF oldcolor) {
+    bool txFloodFill (double x, double y, COLORREF realOld, DWORD mode, HDC dc) {
         if (dc == nullptr)
             return false;
-        COLORREF realOld = oldcolor;
-        if (realOld.r == -1 && realOld.g == -1 && realOld.b == -1)
-            realOld = txGetPixel(x, y, dc);
         if (x >= txGetExtentX() || y >= txGetExtentY())
             return false;
 #ifdef TXLIN_FAST_UNSTABLE_FLOODFILL
@@ -983,40 +963,22 @@ namespace TX {
         }
 #else
         txUpdateWindow(false);
-        std::vector<int> vXPos;
-        COLORREF oldDrawColor = txGetColor();
-        txSetColor(color);
+        std::vector<POINT> pointsMatching;
+        pointsMatching.clear();
         for (int ypos = (int)(y); ypos < txGetExtentY(); ypos++) {
-            vXPos.clear();
-            std::vector<int> lineStart;
             for (int xpos = (int)(x); xpos < txGetExtentX(); xpos++) {
-                if (txGetPixel(xpos, ypos, dc) == realOld)
-                    vXPos.push_back(xpos);
+                bool criteriaMatch = (txGetPixel(xpos, ypos, dc) == realOld);
+                if (mode == FLOODFILLBORDER)
+                    criteriaMatch = !(criteriaMatch);
+                if (criteriaMatch)
+                    txSetPixel(xpos, ypos, txGetFillColor(), dc);
             }
-            if (vXPos.size() > 1)
-                txLine(vXPos.front(), ypos, vXPos.back(), ypos, dc);
         }
-        txSetColor(oldDrawColor);
         txUpdateWindow(true);
 #endif
         return true;
 
     }
-
-    /*
-
-
-    bool txArc (double x0, double y0, double x1, double y1, double startAngle, double totalAngle, HDC dc = txDC());
-
-
-    bool txPie (double x0, double y0, double x1, double y1, double startAngle, double totalAngle, HDC dc = txDC());
-
-
-    bool txChord (double x0, double y0, double x1, double y1, double startAngle, double totalAngle, HDC dc = txDC());
-
-
-    bool txFloodFill (double x, double y, COLORREF color = TX_TRANSPARENT, DWORD mode = FLOODFILLSURFACE, HDC dc = txDC());
-    */
 
     bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y3) {
         if (txLine(x1, y1, x2, y2) && txLine(x2, y2, x3, y3) && txLine(x3, y3, x1, y1))
@@ -1218,7 +1180,7 @@ namespace TX {
         else if (upperChar == 'X') {
             _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
             _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-        }
+        }                  
         else if (upperChar == 'Y') {
             _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
             _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
@@ -1333,6 +1295,8 @@ namespace TX {
         return dc;
     }
 
+    #define NULLIFY(func) (void)(#func)
+
     inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, int width, int height, HDC dc = txDC()) {
         if (dc == nullptr)
             return false;
@@ -1341,8 +1305,10 @@ namespace TX {
         int hhww = hh * ww;
         int xz = width;
         int dx = 0;
+#ifndef TXLIN_SPEED_OVER_FLOODFILL
         for (int x = (width * (-1)); x <= width; x++)
             txSetPixel((int)(x0) + x, y0, txGetColor(), dc);
+#endif
 
         // now do both halves at the same time, away from the diameter
         for (int y = 1; y <= height; y++) {
@@ -1353,17 +1319,32 @@ namespace TX {
             dx = xz - xa;  // current approximation of the slope
             xz = xa;
 
-            for (int x = (xz * (-1)); x <= xz; x++) {
-                txSetPixel((int)(x0) + x, (int)(y0) - y, txGetColor(), dc);
-                txSetPixel((int)(x0) + x, (int)(y0) + y, txGetColor(), dc);
+            int xstart = x0 + (xz * (-1));
+            int xend = x0 + xz;
+
+#ifndef TXLIN_SPEED_OVER_FLOODFILL
+            if (txGetFillColor() == TX_TRANSPARENT) {
+#endif
+                txSetPixel(xstart, (int)(y0) - y, txGetColor(), dc);
+                txSetPixel(xstart, (int)(y0) + y, txGetColor(), dc);
+                txSetPixel(xend, (int)(y0) - y, txGetColor(), dc);
+                txSetPixel(xend, (int)(y0) + y, txGetColor(), dc);
+#ifndef TXLIN_SPEED_OVER_FLOODFILL
             }
+            else {
+                for (int x = (xz * (-1)); x <= xz; x++) {
+                    txSetPixel((int)(x0) + x, (int)(y0) - y, txGetFillColor(), dc);
+                    txSetPixel((int)(x0) + x, (int)(y0) + y, txGetFillColor(), dc);
+                }
+            }
+#endif
         }
         return true;
     }
 
 #define txSticky() txLinUnportableSDLEventLoop()
 
-    inline bool txEllipse(double x0, double y0, double x1, double y1, HDC dc = txDC()) {
+    bool txEllipse(double x0, double y0, double x1, double y1, HDC dc) {
         int height = txLinUnportableModule((int)(y1 - y0));
         int width = txLinUnportableModule((int)(x1 - x0));
         int x0_new = (int)(x0) + (width / 2);
@@ -1403,6 +1384,15 @@ namespace TX {
         return result;
     }
 
+    inline unsigned txMouseButtons() {
+        Uint32 maskButtons = SDL_GetMouseState(nullptr, nullptr);
+        if ((maskButtons & SDL_BUTTON(SDL_BUTTON_LEFT)) || maskButtons & SDL_BUTTON(SDL_BUTTON_MIDDLE))
+            return 1;
+        else if (maskButtons & SDL_BUTTON(SDL_BUTTON_RIGHT))
+            return 2;
+        return 0;
+    }
+
     inline int txMouseX() {
         return (int)(txMousePos().x);
     }
@@ -1411,7 +1401,7 @@ namespace TX {
         return (int)(txMousePos().y);
     }
 
-    inline int txMessageBox(const char* text, const char* header = "TXLin", unsigned flags = MB_OK) {
+    int txMessageBox(const char* text, const char* header, unsigned flags) {
         if (text == nullptr || header == nullptr)
             return IDCANCEL;
 #ifndef TXLIN_GNOMEMESSAGEBOXES
@@ -1629,7 +1619,7 @@ namespace TX {
     #else
         if (std::system("which zenity > /dev/null 2>&1") != 0 && std::system("which kdialog > /dev/null 2>&1") != 0)
             return txInputBox_nonNativeSDLRender(text, caption, input);
-        else if (std::system("which kdialog > /dev/null 2>&1") != 0)
+        else if (std::system("which kdialog > /dev/null 2>&1") == 0)
             std::system(std::string("kdialog --title \"" + std::string(caption) + "\" --inputbox '" + std::string(text) + "' '" + std::string(input) + "' > " + std::string(saveSocket) + " 2>/dev/null").c_str());
         else
             std::system(std::string(std::string("zenity --entry --text='") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("' --entry-text='") + std::string(input) + '\'' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
@@ -1685,7 +1675,7 @@ namespace TX {
         return stream.str();
     }
 
-    inline void txSetConsoleAttr(unsigned colors = 0x07) {
+    void txSetConsoleAttr(unsigned colors) {
         txLinUnportableLastTerminalColor = colors;
         unsigned colors2 = colors;
         if (colors2 > 0x9) {
@@ -1906,50 +1896,8 @@ namespace TX {
                                         }
 
 
-    bool txNotifyIcon_nonNativeSDLRender(const char* text, const char* title) {
-        SDL_DisplayMode* modeStruct = (SDL_DisplayMode*)(malloc(sizeof(SDL_DisplayMode)));
-        if (SDL_GetDesktopDisplayMode(0, modeStruct) != 0) {
-            free(modeStruct);
-            return false;
-        }
-        SDL_Window* notificationWindow = SDL_CreateWindow("TXLin Fallback Notification", SDL_WINDOWPOS_CENTERED, 20, 500, 60, SDL_WINDOW_SHOWN);
-        SDL_Renderer* rendererWindow = SDL_CreateRenderer(notificationWindow, -1, SDL_RENDERER_SOFTWARE);
-        SDL_SetRenderDrawColor(rendererWindow, 211, 211, 211, 0);
-#ifdef __APPLE__
-        SDL_SetRenderDrawColor(rendererWindow, 220, 220, 220, 0);
-#endif
-        SDL_RenderClear(rendererWindow);
-        SDL_SetRenderDrawColor(rendererWindow, 220, 20, 60, 0);
-        SDL_RenderDrawLine(rendererWindow, 6, 6, 6, 40);
-        SDL_RenderDrawLine(rendererWindow, 7, 6, 7, 40);
-        SDL_RenderDrawPoint(rendererWindow, 6, 55);
-        SDL_RenderDrawPoint(rendererWindow, 7, 55);
-        SDL_RenderDrawPoint(rendererWindow, 6, 56);
-        SDL_RenderDrawPoint(rendererWindow, 7, 56);
-        SDL_SetRenderDrawColor(rendererWindow, 0, 0, 0, 0);
-        SDL_UpdateWindowSurface(notificationWindow);
-        _txTextOut(26, 6, title, rendererWindow);
-        _txTextOut(26, 16, text, rendererWindow);
-        _txTextOut(26, 26, "This notification will disappear in 5 seconds.", rendererWindow);
-        SDL_UpdateWindowSurface(notificationWindow);
-        SDL_SetWindowBordered(notificationWindow, SDL_FALSE);
-        SDL_RaiseWindow(notificationWindow);
-        SDL_RaiseWindow(SDL_GetWindowFromID(txWindow()));
-        SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
-        bool exitFromLoop = false;
-        int kickstartTicks = SDL_GetTicks();
-        while (exitFromLoop == false) {
-            SDL_PollEvent(eventHandler);
-            if (SDL_GetTicks() - kickstartTicks >= 5000)
-                exitFromLoop = true;
-        }
-        SDL_DestroyRenderer(rendererWindow);
-        SDL_DestroyWindow(notificationWindow);
-        return true;
-    }
-
     char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
-        SDL_Window* inputBoxWindow = SDL_CreateWindow("SDL Input Box", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 300, 100, SDL_WINDOW_SHOWN);
+        SDL_Window* inputBoxWindow = SDL_CreateWindow("TXLin Fallback Input Box", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 300, 100, SDL_WINDOW_SHOWN);
         SDL_Renderer* rendererWindow = SDL_CreateRenderer(inputBoxWindow, -1, SDL_RENDERER_SOFTWARE);
         if (rendererWindow == nullptr || inputBoxWindow == nullptr || text == nullptr || input == nullptr || caption == nullptr)
             return nullptr;
@@ -2053,6 +2001,113 @@ namespace TX {
         if (strlen(inputString) < 1)
             return nullptr;
         return inputString;
+    }
+
+    #define txThreadSleep(millisecs) usleep(1000 * millisecs)
+    #define txThreadLine_sepDC(x0, x1, y0, y1, dc) txLine(x0, x1, y0, y1, dc, true)
+    #define txThreadLine(x0, x1, y0, y1) txThreadLine_sepDC(x0, x1, y0, y1, txDC())
+    #define txThreadRedrawWindow() txRedrawWindow(true)
+
+#ifdef TXLIN_PTHREAD
+    inline void* txLinUnportablePthreadsFunctionHandler(void* param) {
+        void (*splitThreadFunc)(bool) = (void (*)(bool))(param);
+        splitThreadFunc(true);
+        pthread_exit(0);
+    }
+
+    inline txthread_t txCreateThread(void (*splitThreadFunc)(bool)) {
+        pthread_attr_t attrThread;
+        pthread_attr_init(&attrThread);
+        txthread_t resultingValue;
+        pthread_create(&resultingValue, &attrThread, txLinUnportablePthreadsFunctionHandler, (void*)(splitThreadFunc));
+        return resultingValue;
+    }
+
+    inline bool txCancelThread(txthread_t thread) {
+        return (pthread_cancel(thread) == 0);
+    }
+
+    inline bool txIsThreadRunning(txthread_t thread) {
+        return (pthread_kill(thread, 0) == 0);
+    }
+
+    inline bool txJoinThread(txthread_t thread) {
+        pthread_join(thread, nullptr);
+        return true;
+    }
+#else
+    #define txthread_t int
+    #define _txthreaddummy_INTERNALS_warning(func) TXLIN_WARNING(#func "is not available because you have disabled the TXLin threads API, which is experimental.");
+
+    inline txthread_t txCreateThread(void (*splitThreadFunc)(bool)) {
+        _txthreaddummy_INTERNALS_warning(txSplitThread);
+        splitThreadFunc(false);
+        return 0;
+    }
+
+    inline bool txCancelThread(txthread_t thread) {
+        _txthreaddummy_INTERNALS_warning(txSplitThread);
+        return true;
+    }
+
+    inline bool txIsThreadRunning(txthread_t thread) {
+        _txthreaddummy_INTERNALS_warning(txThreadRunning);
+        return false;
+    }
+
+    inline bool txJoinThread(txthread_t thread) {
+         _txthreaddummy_INTERNALS_warning(txJoinThread);
+        return true;
+    }
+
+    #undef _txthreaddummy_INTERNALS_warning
+#endif
+
+    inline txthread_t txSpiltThread(void (*splitThreadFunc)(bool)) {
+        txMessageBox("You've typoed, man. Cure your bad habit of mistyping already.");
+        return 0;
+    }
+
+    bool txNotifyIcon_nonNativeSDLRender(const char* text, const char* title) {
+        SDL_DisplayMode* modeStruct = (SDL_DisplayMode*)(malloc(sizeof(SDL_DisplayMode)));
+        if (SDL_GetDesktopDisplayMode(0, modeStruct) != 0) {
+            free(modeStruct);
+            return false;
+        }
+        SDL_Window* notificationWindow = SDL_CreateWindow("TXLin Fallback Notification", SDL_WINDOWPOS_CENTERED, 20, 500, 60, SDL_WINDOW_SHOWN);
+        SDL_Renderer* rendererWindow = SDL_CreateRenderer(notificationWindow, -1, SDL_RENDERER_SOFTWARE);
+        SDL_SetRenderDrawColor(rendererWindow, 211, 211, 211, 0);
+#ifdef __APPLE__
+        SDL_SetRenderDrawColor(rendererWindow, 220, 220, 220, 0);
+#endif
+        SDL_RenderClear(rendererWindow);
+        SDL_SetRenderDrawColor(rendererWindow, 220, 20, 60, 0);
+        SDL_RenderDrawLine(rendererWindow, 6, 6, 6, 40);
+        SDL_RenderDrawLine(rendererWindow, 7, 6, 7, 40);
+        SDL_RenderDrawPoint(rendererWindow, 6, 55);
+        SDL_RenderDrawPoint(rendererWindow, 7, 55);
+        SDL_RenderDrawPoint(rendererWindow, 6, 56);
+        SDL_RenderDrawPoint(rendererWindow, 7, 56);
+        SDL_SetRenderDrawColor(rendererWindow, 0, 0, 0, 0);
+        SDL_UpdateWindowSurface(notificationWindow);
+        _txTextOut(26, 6, title, rendererWindow);
+        _txTextOut(26, 16, text, rendererWindow);
+        _txTextOut(26, 26, "This notification will disappear in 5 seconds.", rendererWindow);
+        SDL_UpdateWindowSurface(notificationWindow);
+        SDL_SetWindowBordered(notificationWindow, SDL_FALSE);
+        SDL_RaiseWindow(notificationWindow);
+        SDL_RaiseWindow(SDL_GetWindowFromID(txWindow()));
+        SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
+        bool exitFromLoop = false;
+        int kickstartTicks = SDL_GetTicks();
+        while (exitFromLoop == false) {
+            SDL_PollEvent(eventHandler);
+            if (SDL_GetTicks() - kickstartTicks >= 5000)
+                exitFromLoop = true;
+        }
+        SDL_DestroyRenderer(rendererWindow);
+        SDL_DestroyWindow(notificationWindow);
+        return true;
     }
 
     #undef _txTextOut

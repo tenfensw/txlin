@@ -1,15 +1,9 @@
-ISC License for TXLin
-
+TXLin graphics library for macOS and Linux license agreement
 Copyright (c) 2018-2019, Tim K <timprogrammer@rambler.ru>
 
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
+TXLin usage is allowed for:
+ - non-commercial student/scholar education purposes (though you have to mention that you use TXLin as your daily-driver library and leave a link to http://timkoi.gitlab.io/txlin)
+ - non-commercial software development ONLY IF you get an explicit written permission from either the author of TXLin (Tim K) or from the author of TXLib (Ilya Dedinsky, http://ded32.ru)
+ - personal self-education purposes and basic school projects (a honorable mention of TXLin usage will be appreciated)
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+You may not use TXLin for commercial applications development or commercial education purposes. You also may not use even a small part of TXLin source code UNLESS you get a permission (a written one, not an oral one) from either Tim K or Ilya Dedinsky.
