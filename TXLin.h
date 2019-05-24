@@ -272,6 +272,11 @@ LICENSE file in the source folder for more info.
 #define TXLIN_MACOS_VOICEOVERVOICE "Daniel"
 #endif
 
+#if __cplusplus < 201103L
+#define nullptr 0
+#warning "Your C++ compiler either does not support C++11 or, by default, operates in C++98 preprocessing mode. Please enable the C++11 mode by adding the \"-std=c++0x\" flag to your compiler. TXLin uses some features that are only present in C++11 in some cases, so you might get errors if you do not enable C++11."
+#endif
+
 struct POINT {
     double x;
     double y;   
@@ -1306,8 +1311,10 @@ namespace TX {
         int xz = width;
         int dx = 0;
 #ifndef TXLIN_SPEED_OVER_FLOODFILL
-        for (int x = (width * (-1)); x <= width; x++)
-            txSetPixel((int)(x0) + x, y0, txGetColor(), dc);
+        for (int x = (width * (-1)); x <= width; x++) {
+            if (txGetFillColor() != TX_TRANSPARENT)
+                txSetPixel((int)(x0) + x, y0, txGetColor(), dc);
+        }
 #endif
 
         // now do both halves at the same time, away from the diameter
@@ -1558,11 +1565,12 @@ namespace TX {
         return (std::system(std::string(std::string("osascript -e 'display notification \"") + std::string(format) + std::string("\" with title \"") + std::string(title) + std::string("\"'")).c_str()) == 0);
 #else
         if (std::system("which notify-send > /dev/null 2>&1") != 0) {
-            if (std::system("which kdialog > /dev/null 2>&1") != 0)
-                return txNotifyIcon_nonNativeSDLRender(format, title);
-            else
+            if (std::system("which zenity > /dev/null 2>&1") == 0)
+                return (std::system(std::string("'echo 'message:" + std::string(format) + "' | zenity --notification --listen").c_str()) == 0);
+            else if (std::system("which kdialog > /dev/null 2>&1") == 0)
                 return (std::system(std::string("kdialog --title '" + std::string(title) + "' --passivepopup '" + std::string(format) + "'").c_str()) == 0);
-
+            else
+                return txNotifyIcon_nonNativeSDLRender(format, title);
         }
         return (std::system(std::string(std::string("notify-send -u low '") + std::string(title) + std::string("' '") + std::string(format) + "' 5").c_str()) == 0);
 #endif
@@ -1614,15 +1622,13 @@ namespace TX {
     #ifdef __APPLE__
         if (txMacOSOlderThanMavericks())
             return txInputBox_nonNativeSDLRender(text, caption, input);
-        else
-            std::system(std::string(std::string("osascript -e 'display dialog \"") + std::string(text) + std::string("\" default answer \"") + std::string(input) + std::string("\" with title \"") + std::string(caption) + std::string("\"' > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+        std::system(std::string(std::string("osascript -e 'display dialog \"") + std::string(text) + std::string("\" default answer \"") + std::string(input) + std::string("\" with title \"") + std::string(caption) + std::string("\"' > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
     #else
         if (std::system("which zenity > /dev/null 2>&1") != 0 && std::system("which kdialog > /dev/null 2>&1") != 0)
             return txInputBox_nonNativeSDLRender(text, caption, input);
         else if (std::system("which kdialog > /dev/null 2>&1") == 0)
             std::system(std::string("kdialog --title \"" + std::string(caption) + "\" --inputbox '" + std::string(text) + "' '" + std::string(input) + "' > " + std::string(saveSocket) + " 2>/dev/null").c_str());
-        else
-            std::system(std::string(std::string("zenity --entry --text='") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("' --entry-text='") + std::string(input) + '\'' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
+        std::system(std::string(std::string("zenity --entry --text='") + std::string(caption) + ':' + ' ' + std::string(text) + std::string("' --entry-text='") + std::string(input) + '\'' + std::string(" > ") + std::string(saveSocket) + std::string(" 2>/dev/null")).c_str());
     #endif
         char* userAnsweredCString = txTextDocument(saveSocket);
         if (userAnsweredCString == nullptr)
