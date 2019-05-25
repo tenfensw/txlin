@@ -1848,6 +1848,11 @@ namespace TX {
     }
 
     inline bool txBitBlt(double xDest, double yDest, HDC sourceImage, double xSource = 0.0, double ySource = 0.0) {
+	(void)(xDest);
+	(void)(yDest);
+	(void)(sourceImage);
+	(void)(xSource);
+	(void)(ySource);
         return false;
     }
 
