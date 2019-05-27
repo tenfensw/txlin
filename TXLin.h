@@ -44,9 +44,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.74a, Rev: 106, Date: 2019-04-26 00:00:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.74b, Rev: 108, Date: 2019-05-27 15:55:01]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x174a0106
+#define TXLIN_VERSIONNUM 0x174b0108
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -831,6 +831,8 @@ namespace TX {
         txSetColor(txGetFillColor());
         SDL_RenderClear(dc);
         txSetColor(oldC);
+        if (txLinUnportableAutomaticWindowUpdates)
+            txRedrawWindow();
         return true;
     }
 
@@ -1346,6 +1348,8 @@ namespace TX {
             }
 #endif
         }
+        if (txLinUnportableAutomaticWindowUpdates)
+            txRedrawWindow();
         return true;
     }
 
