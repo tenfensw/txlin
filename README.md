@@ -1,4 +1,6 @@
 # TXLin
+Copyright (c) Tim K 2018-2019 <timprogrammer@rambler.ru>. http://timkoi.gitlab.io/txlin
+
 TXLin is a TXLib-compatible library that provides a simple way to draw graphics in C++ programs. Unlike TXLib, which uses GDI and, thus, works only on Windows, TXLin uses SDL2 and, as such, can work on Linux, macOS and even FreeBSD.
 
 If you are using Windows, then you should use TXLib: http://ded32.ru/
