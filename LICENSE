@@ -1,3 +1,7 @@
-TXLin graphics library is licensed under the same license agreement as TXLib is. You can read that license agreement using either one of the links below:
-- Russian version of the license: http://ded32.net.ru/index/0-6
-- English version of the license: https://translate.google.ru/translate?sl=ru&tl=en&u=http%3A%2F%2Fded32.net.ru%2Findex%2F0-6
+TXLin License
+
+By downloading and using this library, you agree that:
+ - Modifying the library is allowed if you preserve the copyright notices and licensing terms. Redistributing the resulting modified code under a different license is not permitted.
+ - Usage of this library for any (except personal) educational purposes is only allowed under a written permission from the author. To obtain that permission, email to timprogrammer@rambler.ru.
+ - Selling or commercially redistributing TXLin or its modifications is not allowed.
+ - Using TXLin name for promoting other products or modifications of the library is not allowed.
