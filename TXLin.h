@@ -44,7 +44,7 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.74b, Rev: 108, Date: 2019-05-27 15:55:01]"
+#define TXLIN_VERSION "TXLin [Ver: 1.74b, Rev: 108, Date: 2019-06-19 15:26:01]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
 #define TXLIN_VERSIONNUM 0x174b0108
 #ifdef TXLIN_MODULE
@@ -768,7 +768,7 @@ namespace TX {
         return TXLIN_VERSIONNUM;
     }
 
-    const char* txGetModuleFileName (bool fileNameOnly = true) {
+    inline const char* txGetModuleFileName (bool fileNameOnly = true) {
         if (fileNameOnly)
             return nullptr;
         return SDL_GetWindowTitle(SDL_GetWindowFromID(txWindow()));
@@ -779,7 +779,7 @@ namespace TX {
         return result;
     }
 
-    HPEN txSetColor (COLORREF color, double thickness = 1, HDC dc = txDC()) {
+    inline HPEN txSetColor (COLORREF color, double thickness = 1, HDC dc = txDC()) {
         SDL_Renderer* rendererContext = dc;
         if (rendererContext == nullptr)
             return nullptr;
@@ -791,13 +791,13 @@ namespace TX {
         return rendererContext;
     }
 
-    COLORREF txColor (double red, double green, double blue) {
+    inline COLORREF txColor (double red, double green, double blue) {
         COLORREF color = { (int)(red), (int)(green), (int)(blue) };
         txSetColor(color);
         return color;
     }
 
-    COLORREF txGetColor (HDC dc = txDC()) {
+    inline COLORREF txGetColor (HDC dc = txDC()) {
         COLORREF result = { 255, 255, 255 };
         if (dc == nullptr)
             return result;
@@ -805,7 +805,7 @@ namespace TX {
         return result;
     }
 
-    COLORREF txFillColor (double red, double green, double blue) {
+    inline COLORREF txFillColor (double red, double green, double blue) {
         txLinUnportableLastFillColor.r = (int)(red);
         txLinUnportableLastFillColor.g = (int)(green);
         txLinUnportableLastFillColor.b = (int)(blue);
@@ -816,7 +816,7 @@ namespace TX {
         return txLinUnportableLastFillColor;
     }
 
-    COLORREF txExtractColor (COLORREF color, COLORREF component) {
+    inline COLORREF txExtractColor (COLORREF color, COLORREF component) {
         COLORREF resultingColor = color;
         resultingColor.r = resultingColor.r - component.r;
         resultingColor.g = resultingColor.g - component.g;
@@ -850,7 +850,7 @@ namespace TX {
         return txSetPixel(x, y, RGB((int)(red), (int)(green), (int)(blue)), dc);
     }
 
-    Uint32 txLinUnportableGetPixel(SDL_Surface* surface, int x, int y) {
+    inline Uint32 txLinUnportableGetPixel(SDL_Surface* surface, int x, int y) {
         // from http://sdl.beuc.net/sdl.wiki/Pixel_Access
         int bpp = surface->format->BytesPerPixel;
         Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
@@ -987,7 +987,7 @@ namespace TX {
 
     }
 
-    bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y3) {
+    inline bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y3) {
         if (txLine(x1, y1, x2, y2) && txLine(x2, y2, x3, y3) && txLine(x3, y3, x1, y1))
             return true;
         return false;
@@ -1282,7 +1282,7 @@ namespace TX {
     }
 
 
-    unsigned txSetTextAlign (unsigned align = TA_BOTTOM, HDC dc = txDC()) {
+    inline unsigned txSetTextAlign (unsigned align = TA_BOTTOM, HDC dc = txDC()) {
         if (dc == nullptr)
             return 0;
         txLinUnportableTextAlign = align;
