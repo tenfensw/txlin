@@ -44,9 +44,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.74b, Rev: 108, Date: 2019-06-19 15:26:01]"
+#define TXLIN_VERSION "TXLin [Ver: 1.74c, Rev: 110, Date: 2019-06-19 15:30:01]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x174b0108
+#define TXLIN_VERSIONNUM 0x174c0110
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -358,15 +358,19 @@ namespace TX {
 
     inline int txLinUnportableSDLProcessOneEvent() {
         SDL_Event* eventHandler = (SDL_Event*)(malloc(sizeof(SDL_Event)));
-        if (SDL_PollEvent(eventHandler) == 0)
+        if (SDL_PollEvent(eventHandler) == 0) {
+            free(eventHandler);
             return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_NONE;
+        }
         if (eventHandler->type == SDL_QUIT && txLinUnportableAllowExit) {
+            free(eventHandler);
             SDL_DestroyRenderer(txDC());
             SDL_DestroyWindow(SDL_GetWindowFromID(txWindow()));
             SDL_Quit();
             exit(0);
             return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_QUIT;
         }
+        free(eventHandler);
         return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_PROCESSED;
     }
 
