@@ -10,6 +10,7 @@ LICENSE file in the source folder for more info.
 #ifndef TXLIN_H
 #define TXLIN_H
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/types.h>
@@ -37,16 +38,16 @@ LICENSE file in the source folder for more info.
 #define HFONT void*
 #define LONG unsigned long
 #define HBRUSH SDL_Renderer*
-#define LOGFONT void
+#define LOGFONT unsigned int
 #define SHORT unsigned int
 #define CURSORREF SDL_SystemCursor
 #ifdef TXLIN_PTHREAD
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.74c, Rev: 110, Date: 2019-06-19 15:30:01]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 116, Date: 2019-06-20 21:25:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x174c0110
+#define TXLIN_VERSIONNUM 0x174c0114
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -329,13 +330,14 @@ namespace TX {
     static HWND txLinUnportableRecentlyCreatedWindow = -1;
     static unsigned txLinUnportableLastTerminalColor = 0x07;
     static bool txLinUnportableAutomaticWindowUpdates = true;
-    static int TXLIN_TEXTSET_MAXWIDTH = 6;
-    static int TXLIN_TEXTSET_MAXHEIGHT = 6;
+    static int TXLIN_TEXTSET_MAXWIDTH = 12;
+    static int TXLIN_TEXTSET_MAXHEIGHT = 12;
     static COLORREF txLinUnportableLastFillColor = TX_TRANSPARENT;
     static COLORREF txLinUnportableLastDrawColor = TX_WHITE;
     static unsigned txLinUnportableTextAlign = TA_BOTTOM;
     static bool txLinUnportableAllowExit = true;
     static int txLinUnportableLineThickness = 1;
+    static bool txLinUnportableUseMonolithic = false;
 
     inline HDC txDC();
     inline HWND txWindow();
@@ -366,6 +368,7 @@ namespace TX {
             free(eventHandler);
             SDL_DestroyRenderer(txDC());
             SDL_DestroyWindow(SDL_GetWindowFromID(txWindow()));
+            TTF_Quit();
             SDL_Quit();
             exit(0);
             return TXLIN_UNPORTABLEDEF_EVENTPROCESSING_QUIT;
@@ -558,7 +561,15 @@ namespace TX {
     inline bool txLinUnportableInitSDL() {
         signal(SIGTERM, txLinUnportableUnexpectedSignalHandler);
         signal(SIGKILL, txLinUnportableUnexpectedSignalHandler);
-        return (SDL_Init(SDL_INIT_VIDEO) == 0);
+        if ((SDL_Init(SDL_INIT_VIDEO) == 0) == false) {
+            TXLIN_WARNING("SDL_GetError(): " + std::string(SDL_GetError()) + ", your program probably won't start due to SDL2 problems");
+            return false;
+        }
+        if (TTF_Init() != 0) {
+            TXLIN_WARNING("TTF_GetError(): " + std::string(TTF_GetError()) + ", your program probably won't display any text due to SDL2_ttf problems");
+            return false;
+        }
+        return true;
     }
 
     inline int txLinUnportableModule(int number) {
@@ -616,6 +627,38 @@ namespace TX {
 #else
         return false;
 #endif
+    }
+
+    inline bool txLinUnportableFileExists(const char* file) {
+        std::ifstream inputStream(file);
+        return inputStream.good();
+    }
+
+    inline const char* txLinUnportableFindFont() {
+#ifdef __APPLE__
+        return "/System/Library/Fonts/Apple Symbols.ttf";
+#else
+        std::vector<const char*> fontsList;
+        if (getenv("TXLIN_FONTFILE") != nullptr)
+            fontsList.push_back(getenv("TXLIN_FONTFILE"));
+        fontsList.push_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+        fontsList.push_back("/usr/share/fonts/dejavu/DejaVuSans.ttf");
+        fontsList.push_back("/usr/share/fonts/TTF/DejaVuSans.ttf");
+        for (int i = 0; i < fontsList.size(); i++) {
+            if (txLinUnportableFileExists(fontsList.at(i))) {
+                txLinUnportableUseMonolithic = false;
+                return fontsList.at(i);
+            }
+        }
+        txLinUnportableUseMonolithic = true;
+        return nullptr;
+#endif
+    }
+
+    inline LOGFONT* txFontExist(const char* name) {
+        if (strcmp("System", name) == 0)
+            return (LOGFONT*)(1);
+        return nullptr;
     }
 
     inline double txSleep(double time = 0) {
@@ -698,7 +741,7 @@ namespace TX {
     }
 
 
-    HDC txDC() {
+    inline HDC txDC() {
         DBGOUT << "called txDC()" << std::endl;
         SDL_Window* window = SDL_GetWindowFromID(txWindow());
         if (window == nullptr)
@@ -828,7 +871,7 @@ namespace TX {
         return resultingColor;
     }
 
-    bool txClear (HDC dc) {
+    inline bool txClear (HDC dc) {
         if (dc == nullptr)
             return false;
         COLORREF oldC = txGetColor();
@@ -1033,6 +1076,10 @@ namespace TX {
         }
         else if (upperChar == '.')
             txSetPixel((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+        else if (upperChar == ':') {
+            txSetPixel((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
+            txSetPixel((int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y));
+        }
         else if (upperChar == '\n' || upperChar == '\r' || upperChar == '\0') {
             TXLIN_WARNING("Newline character was found in the string specified.");
         }
@@ -1250,15 +1297,42 @@ namespace TX {
         txSetColor(txGetColor(), 1, dc);
         int posx = (int)(x);
         int posy = (int)(y);
-        for (int i = 0; i < strlen(text); i++) {
-            if (text[i] != '\n') {
-                txLinUnportableMonolithicCharacterSet(posx, posy, text[i], dc);
-                posx = posx + TXLIN_TEXTSET_MAXWIDTH + 3;
+        if (txLinUnportableUseMonolithic) {
+            for (int i = 0; i < strlen(text); i++) {
+                if (text[i] != '\n') {
+                    txLinUnportableMonolithicCharacterSet(posx, posy, text[i], dc);
+                    posx = posx + TXLIN_TEXTSET_MAXWIDTH + 3;
+                }
+                else {
+                    posx = (int)(x);
+                    posy = posy + TXLIN_TEXTSET_MAXHEIGHT + 3;
+                }
             }
-            else {
-                posx = (int)(x);
-                posy = posy + TXLIN_TEXTSET_MAXHEIGHT + 3;
+        }
+        else {
+            const char* ttfPath = txLinUnportableFindFont();
+            if (TTF_WasInit() != 1)
+                TTF_Init();
+            TTF_Font* ttfObj = TTF_OpenFont(ttfPath, TXLIN_TEXTSET_MAXHEIGHT);
+            int r = txGetColor().r;
+            int g = txGetColor().g;
+            int b = txGetColor().b;
+            SDL_Color currentColor = { r, g, b, 0 };
+            SDL_Surface* ttfSurface = TTF_RenderUTF8_Solid(ttfObj, text, currentColor);
+            if (ttfSurface == nullptr) {
+                TTF_CloseFont(ttfObj);
+                TXLIN_WARNING("TTF_GetError() reports: " + std::string(TTF_GetError()) + ", text cannot be displayed");
+                return false;
             }
+            TTF_CloseFont(ttfObj);
+            SDL_Rect dstRect;
+            dstRect.x = x;
+            dstRect.y = y;
+            dstRect.w = ttfSurface->w;
+            dstRect.h = ttfSurface->h;
+            if (SDL_BlitSurface(ttfSurface, nullptr, SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow())), &dstRect) != 0)
+                TXLIN_WARNING("SDL_GetError() reports: " + std::string(SDL_GetError()) + ", blit failed, text cannot be displayed");
+            SDL_free(ttfSurface);
         }
         txSetColor(txGetColor(), oldThickness, dc);
         return true;
@@ -1273,15 +1347,19 @@ namespace TX {
         return txTextOut(x0, y0, text, dc);
     }
  
-
-    inline HFONT txSelectFont (const char* name, double sizeY, HDC dc = txDC()) {
-        (void)(dc);
-        (void)(name);
+    inline HFONT txSelectFont(const char* name, double sizeY, HDC dc = txDC()) {
         TXLIN_TEXTSET_MAXWIDTH = ((int)(sizeY) / 2);
         if (TXLIN_TEXTSET_MAXWIDTH < 4)
             TXLIN_TEXTSET_MAXWIDTH = 4;
         TXLIN_TEXTSET_MAXHEIGHT = TXLIN_TEXTSET_MAXWIDTH;
-        TXLIN_WARNING(std::string("txSelectFont(const char* name, double sizeY, HDC dc) 'name' parameter is ignored, because TXLin uses its own monolithic font engine rather than FontConfig. Thus, the font \"" + std::string(name) + "\" is not available."));
+        if (name != nullptr) {
+            if (strcmp(name, "TXLin Mono Fallback") == 0 || strcmp(name, "fallback") == 0)
+                txLinUnportableUseMonolithic = true;
+            else {
+                txLinUnportableFindFont();
+                return &txLinUnportableUseMonolithic;
+            }
+        }
         return nullptr;
     }
 
@@ -1307,6 +1385,7 @@ namespace TX {
     }
 
     #define NULLIFY(func) (void)(#func)
+ 
 
     inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, int width, int height, HDC dc = txDC()) {
         if (dc == nullptr)
@@ -1660,11 +1739,6 @@ namespace TX {
         return allocatedBufferReturned;
     }
 
-    inline LOGFONT* txFontExist(const char* name) {
-        (void)(name);
-        return nullptr;
-    } 
-
     inline std::string txLinUnportableToLinuxColors(unsigned bitColor, bool isBackground = false) {
         if (bitColor == 0x1)
             return "\033[1;34m";
@@ -1915,7 +1989,8 @@ namespace TX {
                                         }
 
 
-    char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
+
+    inline char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
         SDL_Window* inputBoxWindow = SDL_CreateWindow("TXLin Fallback Input Box", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 300, 100, SDL_WINDOW_SHOWN);
         SDL_Renderer* rendererWindow = SDL_CreateRenderer(inputBoxWindow, -1, SDL_RENDERER_SOFTWARE);
         if (rendererWindow == nullptr || inputBoxWindow == nullptr || text == nullptr || input == nullptr || caption == nullptr)
