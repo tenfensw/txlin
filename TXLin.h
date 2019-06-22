@@ -1335,6 +1335,7 @@ namespace TX {
             SDL_free(ttfSurface);
         }
         txSetColor(txGetColor(), oldThickness, dc);
+        txRedrawWindow();
         return true;
     }
 
