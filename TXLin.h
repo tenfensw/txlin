@@ -1261,6 +1261,7 @@ namespace TX {
             }
         }
         txSetColor(txGetColor(), oldThickness, dc);
+        txRedrawWindow();
         return true;
     }
 
