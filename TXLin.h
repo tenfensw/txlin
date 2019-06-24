@@ -1314,9 +1314,9 @@ namespace TX {
             if (TTF_WasInit() != 1)
                 TTF_Init();
             TTF_Font* ttfObj = TTF_OpenFont(ttfPath, TXLIN_TEXTSET_MAXHEIGHT);
-            int r = txGetColor().r;
-            int g = txGetColor().g;
-            int b = txGetColor().b;
+            Uint8 r = txGetColor().r;
+            Uint8 g = txGetColor().g;
+            Uint8 b = txGetColor().b;
             SDL_Color currentColor = { r, g, b, 0 };
             SDL_Surface* ttfSurface = TTF_RenderUTF8_Solid(ttfObj, text, currentColor);
             if (ttfSurface == nullptr) {
