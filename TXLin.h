@@ -46,9 +46,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 116, Date: 2019-06-25 23:15:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 116, Date: 2019-06-27 17:21:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x174c0114
+#define TXLIN_VERSIONNUM 0x176a116
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
