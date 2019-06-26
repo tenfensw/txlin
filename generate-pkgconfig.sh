@@ -1,8 +1,8 @@
 #!/bin/sh
 rm -r -f txlin.pc txlin-macflags
-LIBS="-pthread -DTXLIN_PTHREAD -lm"
+LIBS="-pthread -DTXLIN_PTHREAD -lm -lSDL2_ttf"
 CFLAGS="-pthread -DTXLIN_PTHREAD"
-VERSION=1.74
+VERSION=1.76
 
 touch txlin.pc
 cat >>txlin.pc<<EOF
