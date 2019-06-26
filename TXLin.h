@@ -46,9 +46,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 116, Date: 2019-06-27 17:21:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 118, Date: 2019-06-27 17:21:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x176a116
+#define TXLIN_VERSIONNUM 0x176a118
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -316,8 +316,8 @@ struct SMALL_RECT {
 };
 
 struct TXTYPE_SDLSURFRENDER {
-	SDL_Surface* surface;
-	SDL_Renderer* renderer;
+    SDL_Surface* surface;
+    SDL_Renderer* renderer;
 };
 
 inline bool operator==(const COLORREF& c1, const COLORREF& c2) {
@@ -588,10 +588,10 @@ namespace TX {
     }
 
     inline void txRedrawWindow(bool mtFunc = false) {
-    	for (int i = 0; i < txLinUnportableDCSurfaces.size(); i++) {
-    		if (txLinUnportableDCSurfaces.at(i).renderer != nullptr)
-    			SDL_RenderPresent(txLinUnportableDCSurfaces.at(i).renderer);
-    	}
+        for (int i = 0; i < txLinUnportableDCSurfaces.size(); i++) {
+            if (txLinUnportableDCSurfaces.at(i).renderer != nullptr)
+                SDL_RenderPresent(txLinUnportableDCSurfaces.at(i).renderer);
+        }
         SDL_UpdateWindowSurface(SDL_GetWindowFromID(txWindow()));
         if (mtFunc == false)
             txLinUnportableSDLProcessOneEvent();
@@ -1905,57 +1905,57 @@ namespace TX {
     }
 
     inline HDC txCreateCompatibleDC(double sizeX, double sizeY, HBITMAP bitmap = nullptr) {
-    	(void)(bitmap);
-    	int width = (int)(sizeX);
-    	int height = (int)(sizeY);
-    	SDL_PixelFormat* fmt = SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->format;
-    	if (fmt == nullptr) {
-    		TXLIN_WARNING(SDL_GetError());
-    		return nullptr;
-    	}
-    	SDL_Surface* sfc = SDL_CreateRGBSurfaceWithFormat(0, width, height, fmt->BitsPerPixel, fmt->format);
-    	if (sfc == nullptr) {
-    		TXLIN_WARNING(SDL_GetError());
-    		return nullptr;
-    	}
-    	SDL_Renderer* rdr = SDL_CreateSoftwareRenderer(sfc);
-    	if (rdr == nullptr) {
-    		TXLIN_WARNING(SDL_GetError());
-    		SDL_free(sfc);
-    		return nullptr;
-    	}
-    	TXTYPE_SDLSURFRENDER rtype = { sfc, rdr };
-    	txLinUnportableDCSurfaces.push_back(rtype);
-    	return rdr;
+        (void)(bitmap);
+        int width = (int)(sizeX);
+        int height = (int)(sizeY);
+        SDL_PixelFormat* fmt = SDL_GetWindowSurface(SDL_GetWindowFromID(txWindow()))->format;
+        if (fmt == nullptr) {
+            TXLIN_WARNING(SDL_GetError());
+            return nullptr;
+        }
+        SDL_Surface* sfc = SDL_CreateRGBSurface(0, width, height, fmt->BitsPerPixel, fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask);
+        if (sfc == nullptr) {
+            TXLIN_WARNING(SDL_GetError());
+            return nullptr;
+        }
+        SDL_Renderer* rdr = SDL_CreateSoftwareRenderer(sfc);
+        if (rdr == nullptr) {
+            TXLIN_WARNING(SDL_GetError());
+            SDL_free(sfc);
+            return nullptr;
+        }
+        TXTYPE_SDLSURFRENDER rtype = { sfc, rdr };
+        txLinUnportableDCSurfaces.push_back(rtype);
+        return rdr;
     }
 
     inline HDC txLoadImage(const char* filename, unsigned imageFlags = 0, unsigned loadFlags = 0) {
-    	if (filename == nullptr)
-    		return nullptr;
+        if (filename == nullptr)
+            return nullptr;
         SDL_Surface* surfaceBMP = SDL_LoadBMP(filename);
         if (surfaceBMP == nullptr)
-        	return nullptr;
+            return nullptr;
         TXTYPE_SDLSURFRENDER rtypeBMP = { surfaceBMP, nullptr };
         SDL_Renderer* renderBMP = SDL_CreateSoftwareRenderer(surfaceBMP);
         if (renderBMP == nullptr)
-        	return nullptr;
+            return nullptr;
         rtypeBMP.renderer = renderBMP;
         txLinUnportableDCSurfaces.push_back(rtypeBMP);
         return renderBMP;
     }
 
     inline SDL_Surface* txLinUnportableFindTheCorrectSurfaceByRenderer(HDC dc, bool nullify = false) {
-    	for (int i = 0; i < txLinUnportableDCSurfaces.size(); i++) {
-    		if (txLinUnportableDCSurfaces.at(i).surface != nullptr && txLinUnportableDCSurfaces.at(i).renderer == dc) {
-    			SDL_Surface* retSurface = txLinUnportableDCSurfaces.at(i).surface;
-    			if (nullify) {
-    				txLinUnportableDCSurfaces[i].surface = nullptr;
-    				txLinUnportableDCSurfaces[i].renderer = nullptr;
-    			}
-    			return retSurface;
-    		}
-    	}
-    	return nullptr;
+        for (int i = 0; i < txLinUnportableDCSurfaces.size(); i++) {
+            if (txLinUnportableDCSurfaces.at(i).surface != nullptr && txLinUnportableDCSurfaces.at(i).renderer == dc) {
+                SDL_Surface* retSurface = txLinUnportableDCSurfaces.at(i).surface;
+                if (nullify) {
+                    txLinUnportableDCSurfaces[i].surface = nullptr;
+                    txLinUnportableDCSurfaces[i].renderer = nullptr;
+                }
+                return retSurface;
+            }
+        }
+        return nullptr;
     }
 
     inline bool txDeleteDC(HDC dc) {
@@ -1975,20 +1975,20 @@ namespace TX {
         SDL_Surface* destSfc = txLinUnportableFindTheCorrectSurfaceByRenderer(destImage);
         SDL_Surface* sourceSfc = txLinUnportableFindTheCorrectSurfaceByRenderer(sourceImage);
         if (sourceImage == nullptr || destImage == nullptr)
-        	return false;
+            return false;
         rectOrig.w = sourceSfc->w;
         rectOrig.h = sourceSfc->h;
         if (SDL_BlitSurface(sourceSfc, &rectOrig, destSfc, &rectBlit) != 0) {
-        	TXLIN_WARNING(SDL_GetError());
-        	return false;
+            TXLIN_WARNING(SDL_GetError());
+            return false;
         }
         return true;
     }
 
     inline bool txBitBlt(double xDest, double yDest, HDC sourceImage, double xSource = 0.0, double ySource = 0.0) {
-    	SDL_Surface* sfc = txLinUnportableFindTheCorrectSurfaceByRenderer(sourceImage);
-    	if (sfc == nullptr)
-    		return false;
+        SDL_Surface* sfc = txLinUnportableFindTheCorrectSurfaceByRenderer(sourceImage);
+        if (sfc == nullptr)
+            return false;
         return txBitBlt(txDC(), xDest, yDest, (double)(sfc->w), (double)(sfc->h), sourceImage, xSource, ySource);
     }
 
@@ -1997,7 +1997,7 @@ namespace TX {
     }
 
     inline bool txTransparentBlt(double xDest, double yDest, HDC sourceImage, COLORREF transColor = TX_BLACK, double xSource = 0.0, double ySource = 0.0) {
-    	(void)(transColor);
+        (void)(transColor);
         return txBitBlt(xDest, yDest, sourceImage, xSource, ySource);
     }
 
