@@ -9,8 +9,8 @@ LICENSE file in the source folder for more info.
 
 #ifndef TXLIN_H
 #define TXLIN_H
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <SDL.h>
+#include <SDL_ttf.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/types.h>
@@ -46,9 +46,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 118, Date: 2019-06-27 17:21:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 119, Date: 2019-07-19 17:51:00]"
 #define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x176a118
+#define TXLIN_VERSIONNUM 0x176a119
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -397,7 +397,7 @@ namespace TX {
 #endif
     }
 
-    inline HWND txWindow() {
+    HWND txWindow() {
         DBGINT(txLinUnportableRecentlyCreatedWindow);
         return txLinUnportableRecentlyCreatedWindow;
     }
@@ -757,7 +757,7 @@ namespace TX {
     }
 
 
-    inline HDC txDC() {
+    HDC txDC() {
         DBGOUT << "called txDC()" << std::endl;
         SDL_Window* window = SDL_GetWindowFromID(txWindow());
         if (window == nullptr)
@@ -887,7 +887,7 @@ namespace TX {
         return resultingColor;
     }
 
-    inline bool txClear (HDC dc) {
+    bool txClear (HDC dc) {
         if (dc == nullptr)
             return false;
         COLORREF oldC = txGetColor();
@@ -1394,7 +1394,7 @@ namespace TX {
         TXLIN_WARNING("txTextCursor(bool value) was added to TXLin for source compatibility. It actually does nothing, because there is no easy and cross-platform way to turn off cursor blinking on both Linux and Mac OS X.");
     }
 
-    inline HBRUSH txSetFillColor(COLORREF color, HDC dc) {
+    HBRUSH txSetFillColor(COLORREF color, HDC dc) {
         if (dc == nullptr)
             return nullptr;
         txFillColor(color.r, color.g, color.b);
@@ -2032,7 +2032,7 @@ namespace TX {
 
 
 
-    inline char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
+    char* txInputBox_nonNativeSDLRender(const char* text, const char* caption, const char* input, char mask) {
         SDL_Window* inputBoxWindow = SDL_CreateWindow("TXLin Fallback Input Box", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 300, 100, SDL_WINDOW_SHOWN);
         SDL_Renderer* rendererWindow = SDL_CreateRenderer(inputBoxWindow, -1, SDL_RENDERER_SOFTWARE);
         if (rendererWindow == nullptr || inputBoxWindow == nullptr || text == nullptr || input == nullptr || caption == nullptr)
