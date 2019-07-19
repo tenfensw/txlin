@@ -9,8 +9,8 @@ LICENSE file in the source folder for more info.
 
 #ifndef TXLIN_H
 #define TXLIN_H
-#include <SDL.h>
-#include <SDL_ttf.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/types.h>
@@ -130,25 +130,25 @@ LICENSE file in the source folder for more info.
 #define TXLIN_WARNINGNOTIMPLEMENTED() TXLIN_WARNING(std::string(__PRETTY_FUNCTION__) + " is not implemented yet.")
 
 // colors
-#define TX_BLACK RGB(0, 0, 0)   
+#define TX_BLACK RGB(0, 0, 0)
 #define TX_BLUE RGB(0, 0, 128)
-#define TX_GREEN RGB(0, 128, 0)   
-#define TX_CYAN RGB(0, 128, 128)   
-#define TX_RED RGB(128, 0, 0)   
-#define TX_MAGENTA RGB(128, 0, 128)  
+#define TX_GREEN RGB(0, 128, 0)
+#define TX_CYAN RGB(0, 128, 128)
+#define TX_RED RGB(128, 0, 0)
+#define TX_MAGENTA RGB(128, 0, 128)
 #define TX_BROWN RGB(128, 128, 0)
-#define TX_ORANGE RGB(255, 128, 0)  
-#define TX_GRAY RGB(160, 160, 160)   
+#define TX_ORANGE RGB(255, 128, 0)
+#define TX_GRAY RGB(160, 160, 160)
 #define TX_DARKGRAY RGB(128, 128, 128)
 #define TX_LIGHTGRAY RGB(192, 192, 192)
-#define TX_LIGHTBLUE RGB(0, 0, 255)   
-#define TX_LIGHTGREEN RGB(0, 255, 128)   
-#define TX_LIGHTCYAN RGB(0, 255, 255)   
+#define TX_LIGHTBLUE RGB(0, 0, 255)
+#define TX_LIGHTGREEN RGB(0, 255, 128)
+#define TX_LIGHTCYAN RGB(0, 255, 255)
 #define TX_LIGHTRED RGB(255, 0, 128)
 #define TX_LIGHTMAGENTA RGB(255, 0, 255)
 #define TX_PINK RGB(255, 128, 255)
-#define TX_YELLOW RGB(255, 255, 128)   
-#define TX_WHITE RGB(255, 255, 255) 
+#define TX_YELLOW RGB(255, 255, 128)
+#define TX_WHITE RGB(255, 255, 255)
 
 #define TX_GREY TX_GRAY
 #define TX_DARKGREY TX_DARKGRAY
@@ -282,7 +282,7 @@ LICENSE file in the source folder for more info.
 
 struct POINT {
     double x;
-    double y;   
+    double y;
 };
 
 struct SIZE {
@@ -390,7 +390,7 @@ namespace TX {
         void* addressesBuffer = (void*)(calloc(10, sizeof(unsigned)));
         int countaddr = backtrace(&addressesBuffer, 10);
         char** arrayofcstrings = backtrace_symbols(&addressesBuffer, countaddr);
-        for (int i = 0; i < countaddr; i++) 
+        for (int i = 0; i < countaddr; i++)
             std::cerr << arrayofcstrings[i] << std::endl;
 #else
         std::cerr << "Backtrace fetching was disabled during compile time." << std::endl;
@@ -537,8 +537,8 @@ namespace TX {
         where->top = basey;
         where->right = basex + width;
         where->bottom = basey + height;
-        return true;  
-    } 
+        return true;
+    }
 
     inline SDL_Point* txLinUnportablePointCapsToSDL(const POINT* points, int pointsCount) {
         SDL_Point* pointsFinal = (SDL_Point*)(calloc(pointsCount, sizeof(SDL_Point)));
@@ -873,7 +873,7 @@ namespace TX {
         txLinUnportableLastFillColor.g = (int)(green);
         txLinUnportableLastFillColor.b = (int)(blue);
         return txLinUnportableLastFillColor;
-    } 
+    }
 
     COLORREF txGetFillColor (HDC dc) {
         return txLinUnportableLastFillColor;
@@ -978,7 +978,7 @@ namespace TX {
                 SDL_RenderDrawLine(dc, (int)(x0) + i, (int)(y0), (int)(x1) + i, (int)(y1));
         }
         if (txLinUnportableAutomaticWindowUpdates && mtVer == false)
-            txRedrawWindow(); 
+            txRedrawWindow();
         return true;
     }
 
@@ -994,7 +994,7 @@ namespace TX {
         if (txGetFillColor() != TX_TRANSPARENT)
             txFloodFill(x0, y0, txGetPixel(x0 + 1, y0 + 1, dc), FLOODFILLSURFACE, dc);
         if (txLinUnportableAutomaticWindowUpdates)
-            txRedrawWindow(); 
+            txRedrawWindow();
         return true;
     }
 
@@ -1008,7 +1008,7 @@ namespace TX {
         free(sdlPoints);
         sdlPoints = nullptr;
         if (txLinUnportableAutomaticWindowUpdates)
-            txRedrawWindow(); 
+            txRedrawWindow();
         return true;
     }
 
@@ -1254,7 +1254,7 @@ namespace TX {
         else if (upperChar == 'X') {
             _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y) + TXLIN_TEXTSET_MAXHEIGHT);
             _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
-        }                  
+        }
         else if (upperChar == 'Y') {
             _txLine((int)(x), (int)(y) + TXLIN_TEXTSET_MAXHEIGHT, (int)(x) + TXLIN_TEXTSET_MAXWIDTH, (int)(y));
             _txLine((int)(x), (int)(y), (int)(x) + TXLIN_TEXTSET_HALFWIDTH, (int)(y) + TXLIN_TEXTSET_HALFHEIGHT);
@@ -1363,7 +1363,7 @@ namespace TX {
         (void)(y1);
         return txTextOut(x0, y0, text, dc);
     }
- 
+
     inline HFONT txSelectFont(const char* name, double sizeY, HDC dc = txDC()) {
         TXLIN_TEXTSET_MAXWIDTH = ((int)(sizeY) / 2);
         if (TXLIN_TEXTSET_MAXWIDTH < 4)
@@ -1402,7 +1402,7 @@ namespace TX {
     }
 
     #define NULLIFY(func) (void)(#func)
- 
+
 
     inline bool txLinUnportableEllipseClassicImplementation(double x0, double y0, int width, int height, HDC dc = txDC()) {
         if (dc == nullptr)
@@ -1556,7 +1556,7 @@ namespace TX {
                                                { 255, 255, 255 },
                                                { 0, 0, 0 },
                                                { 128, 128, 128 },
-                                               { 112, 128, 144 } 
+                                               { 112, 128, 144 }
                                             }};
         SDL_MessageBoxData mbData = { 0, SDL_GetWindowFromID(txWindow()), header, text, numbuttons, buttons, &mbColors };
         int resultingButton = IDCANCEL;
@@ -1875,12 +1875,12 @@ namespace TX {
             printf ("\n" "%*p ", (int)(sizeof(address)) * 2, p);
             int color = FOREGROUND_LIGHTGREEN;
             for (x = 0; x < 16; x++) {
-                txSetConsoleAttr (color + x/4%2); 
-                printf ("%02X ", p[x]); 
+                txSetConsoleAttr (color + x/4%2);
+                printf ("%02X ", p[x]);
             }
-            for (x = 0; x < 16; x++) { 
-                txSetConsoleAttr (color + x/4%2); 
-                printf ("%c", (isprint (p[x]) && !iscntrl (p[x]))? p[x] : '.'); 
+            for (x = 0; x < 16; x++) {
+                txSetConsoleAttr (color + x/4%2);
+                printf ("%c", (isprint (p[x]) && !iscntrl (p[x]))? p[x] : '.');
             }
         }
         txSetConsoleAttr(attr);
@@ -2040,7 +2040,7 @@ namespace TX {
 #ifdef __APPLE__
         int systemThemeRed = 220;
         int systemThemeGreen = 220;
-        int systemThemeBlue = 220;   
+        int systemThemeBlue = 220;
 #else
         int systemThemeRed = 211;
         int systemThemeGreen = 211;
