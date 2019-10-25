@@ -21,7 +21,7 @@ On macOS, you should install MacPorts from https://www.macports.org and then run
 sudo port install libsdl2
 ```
 
-Then you should generate pkg-config files and ``txlin-macflags`` script and install one of them to ``/usr/local`` on a Mac or to ``/usr`` on Linux. This is done automatically, so all you have to do is to run this command:
+***Then*** you should generate pkg-config files and ``txlin-macflags`` script and install one of them to ``/usr/local`` on a Mac or to ``/usr`` on Linux. This is done automatically, so all you have to do is to run this command:
 ```
 sudo ./generate-pkgconfig.sh --install-with-txlin
 ```
