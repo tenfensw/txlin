@@ -26,7 +26,9 @@ sudo port install libsdl2
 sudo ./generate-pkgconfig.sh --install-with-txlin
 ```
 
-After that, you are ready to use TXLin.
+After that, you are ready to use TXLin with your IDE or via terminal.
+
+&#x1F534; **PLEASE READ THIS ARTICLE IF YOU ARE PLANNING TO USE TXLIN WITH CLION OR CMAKE: https://gist.github.com/RoverAMD/1d74cc76d828b8289ee7a6a48655a727**
 
 ## Porting TXLib apps to TXLin
 The amount of porting work to be done depends on the complexity of the application and its dependence on Windows-specific API. For most TXLib apps, portng to TXLin is just a matter of replacing ``#include "TXLib.h"`` with ``#include "TXLin.h"``. For apps that rely on TXLib's "sticky" window functionality (the window with the drawing canvas does not close after all graphical operations were compiled unless the user clicked the close button), ``txSticky()`` should be added right before the ``return 0`` statement. Apps that load resources or operate with Windows NT paths (paths that use ``\\`` as the seperator intead of UNIX ``/`` seperator) have to be modified so that they used ``/`` as the seperator for directories. 
