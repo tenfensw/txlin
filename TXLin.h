@@ -46,9 +46,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76b, Rev: 120, Date: 2019-10-30 16:59:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76c, Rev: 121, Date: 2019-10-30 22:31:00]"
 #define TXLIN_AUTHOR "Copyright (C) RoverAMD/timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x176a119
+#define TXLIN_VERSIONNUM 0x176c121
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -909,6 +909,16 @@ namespace TX {
         txSetColor(color);
         SDL_RenderDrawPoint(dc, (int)(x), (int)(y));
         txSetColor(oldC);
+        return true;
+    }
+
+    inline bool txSetPixel_e (double x, double y, COLORREF color = txGetColor(), HDC dc = txDC()) {
+        if (dc == nullptr)
+            return false;
+        COLORREF legacyColor = txLinUnportableLastDrawColor;
+        SDL_SetRenderDrawColor(dc, color.r, color.g, color.b, 0);
+        SDL_RenderDrawPoint(dc, (int)(x), (int)(y));
+        SDL_SetRenderDrawColor(dc, legacyColor.r, legacyColor.g, legacyColor.b, 0);
         return true;
     }
 
