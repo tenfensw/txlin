@@ -46,8 +46,8 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76a, Rev: 119, Date: 2019-07-19 17:51:00]"
-#define TXLIN_AUTHOR "Copyright (C) timkoi (Tim K, http://timkoi.gitlab.io/)"
+#define TXLIN_VERSION "TXLin [Ver: 1.76b, Rev: 120, Date: 2019-10-30 16:59:00]"
+#define TXLIN_AUTHOR "Copyright (C) RoverAMD/timkoi (Tim K, http://timkoi.gitlab.io/)"
 #define TXLIN_VERSIONNUM 0x176a119
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
@@ -104,8 +104,11 @@ LICENSE file in the source folder for more info.
 #define _TX_AUTHOR TXLIN_AUTHOR
 #define _TX_VER TXLIN_VERSIONNUM
 #define __TX_COMPILER__ TXLIN_COMPILER
-#define meow bark TXLIN_WARNING("meow is deprecated, use bark instead.");
-#define bark ;
+#define bark meow TXLIN_WARNING("bark is deprecated, use meow")
+
+// Meow :-) https://www.instagram.com/p/BxYHsZBJKgE/
+#define meow ;
+#define please
 #define txPI 3.14159265358979323846
 
 #define VK_UP SDL_SCANCODE_UP
@@ -1050,12 +1053,6 @@ namespace TX {
 
     }
 
-    inline bool txTriangle (double x1, double y1, double x2, double y2, double x3, double y3) {
-        if (txLine(x1, y1, x2, y2) && txLine(x2, y2, x3, y3) && txLine(x3, y3, x1, y1))
-            return true;
-        return false;
-    }
-
     inline void txLinUnportableSDLEventLoop() {
         bool stop = false;
         while (stop == false) {
@@ -1453,7 +1450,7 @@ namespace TX {
         return true;
     }
 
-#define txSticky() txLinUnportableSDLEventLoop()
+#define txSticky() { txRedrawWindow(); txLinUnportableSDLEventLoop(); }
 
     bool txEllipse(double x0, double y0, double x1, double y1, HDC dc) {
         int height = txLinUnportableModule((int)(y1 - y0));
