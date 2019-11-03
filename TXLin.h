@@ -902,16 +902,6 @@ namespace TX {
         return true;
     }
 
-    inline bool txSetPixel (double x, double y, COLORREF color = txGetColor(), HDC dc = txDC()) {
-        if (dc == nullptr)
-            return false;
-        COLORREF oldC = txGetColor();
-        txSetColor(color);
-        SDL_RenderDrawPoint(dc, (int)(x), (int)(y));
-        txSetColor(oldC);
-        return true;
-    }
-
     inline bool txSetPixel_e (double x, double y, COLORREF color = txGetColor(), HDC dc = txDC()) {
         if (dc == nullptr)
             return false;
@@ -919,8 +909,12 @@ namespace TX {
         SDL_SetRenderDrawColor(dc, color.r, color.g, color.b, 0);
         SDL_RenderDrawPoint(dc, (int)(x), (int)(y));
         SDL_SetRenderDrawColor(dc, legacyColor.r, legacyColor.g, legacyColor.b, 0);
+        if (txLinUnportableAutomaticWindowUpdates)
+            txRedrawWindow();
         return true;
     }
+
+    #define txSetPixel txSetPixel_e
 
     inline bool txPixel (double x, double y, double red, double green, double blue, HDC dc = txDC()) {
         return txSetPixel(x, y, RGB((int)(red), (int)(green), (int)(blue)), dc);
