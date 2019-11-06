@@ -46,9 +46,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76c, Rev: 121, Date: 2019-10-30 22:31:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76d, Rev: 122, Date: 2019-11-06 20:44:00]"
 #define TXLIN_AUTHOR "Copyright (C) RoverAMD/timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x176c121
+#define TXLIN_VERSIONNUM 0x176d122
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -107,6 +107,12 @@ LICENSE file in the source folder for more info.
 #define bark meow TXLIN_WARNING("bark is deprecated, use meow")
 
 // Meow :-) https://www.instagram.com/p/BxYHsZBJKgE/
+// /\____/\
+// | . .  |
+// | \/\/ |
+// --------
+// Squared cat
+
 #define meow ;
 #define please
 #define txPI 3.14159265358979323846
@@ -758,6 +764,7 @@ namespace TX {
         SDL_RaiseWindow(window);
         return true;
     }
+
 
 
     HDC txDC() {
@@ -1930,20 +1937,6 @@ namespace TX {
         return rdr;
     }
 
-    inline HDC txLoadImage(const char* filename, unsigned imageFlags = 0, unsigned loadFlags = 0) {
-        if (filename == nullptr)
-            return nullptr;
-        SDL_Surface* surfaceBMP = SDL_LoadBMP(filename);
-        if (surfaceBMP == nullptr)
-            return nullptr;
-        TXTYPE_SDLSURFRENDER rtypeBMP = { surfaceBMP, nullptr };
-        SDL_Renderer* renderBMP = SDL_CreateSoftwareRenderer(surfaceBMP);
-        if (renderBMP == nullptr)
-            return nullptr;
-        rtypeBMP.renderer = renderBMP;
-        txLinUnportableDCSurfaces.push_back(rtypeBMP);
-        return renderBMP;
-    }
 
     inline SDL_Surface* txLinUnportableFindTheCorrectSurfaceByRenderer(HDC dc, bool nullify = false) {
         for (int i = 0; i < txLinUnportableDCSurfaces.size(); i++) {
@@ -1967,6 +1960,9 @@ namespace TX {
         SDL_free(sfc);
         return true;
     }
+
+#ifdef TXLIN_BUILTINBLT
+#warning "You won't be able to use TXCairo until you disable built-in txBitBlt implementation that does not work at all."
 
     inline bool txBitBlt(HDC destImage, double xDest, double yDest, double width = 0.0, double height = 0.0, HDC sourceImage = txDC(), double xSource = 0.0, double ySource = 0.0) {
         if (sourceImage == nullptr || destImage == nullptr)
@@ -2013,6 +2009,8 @@ namespace TX {
         (void)(alpha);
         return txBitBlt(xDest, yDest, sourceImage, xSource, ySource);
     }
+
+#endif
 
     #define _txTextOut(x, y, text, renderer) { COLORREF originalColor = txGetColor(); \
                                                txSetColor(TX_BLACK); \
