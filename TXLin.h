@@ -1005,8 +1005,18 @@ namespace TX {
         rectangle.w = txLinUnportableModule(x1 - x0);
         rectangle.h = txLinUnportableModule(y1 - y0);
         SDL_RenderDrawRect(dc, &rectangle);
-        if (txGetFillColor() != TX_TRANSPARENT)
+        if (txGetFillColor() != TX_TRANSPARENT) {
+#ifdef TXLIN_USE_FLOODFILL_IN_RECTANGLES
+            double xFinal = rectangle.x + rectangle.w;
+            COLORREF oldColor = txGetColor();
+            txSetColor(txGetFillColor());
+            for (unsigned i = (unsigned)(rectangle.y); i < ((unsigned)(rectangle.y) + (unsigned)(rectangle.h)); i++)
+                txLine(xFinal, i, rectangle.x, i, dc);
+            txSetColor(oldColor);
+#else
             txFloodFill(x0, y0, txGetPixel(x0 + 1, y0 + 1, dc), FLOODFILLSURFACE, dc);
+#endif
+        }
         if (txLinUnportableAutomaticWindowUpdates)
             txRedrawWindow();
         return true;
