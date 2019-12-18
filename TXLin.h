@@ -1008,7 +1008,7 @@ namespace TX {
         rectangle.h = txLinUnportableModule(y1 - y0);
         SDL_RenderDrawRect(dc, &rectangle);
         if (txGetFillColor() != TX_TRANSPARENT) {
-#ifdef TXLIN_USE_FLOODFILL_IN_RECTANGLES
+#ifdef TXLIN_NO_USE_FLOODFILL_IN_RECTANGLES
             double xFinal = rectangle.x + rectangle.w;
             COLORREF oldColor = txGetColor();
             txSetColor(txGetFillColor());
