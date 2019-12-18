@@ -91,7 +91,9 @@ LICENSE file in the source folder for more info.
 #define TXLIN_NO_CPU_DETECTION 1
 #warning "TXLin cannot detect your current operating system. Use at your own risk."
 #endif
+#ifndef TXLIN_INTELGPU_ACCEL
 #define TXLIN_NO_3D_ACCELERATION 1
+#endif
 
 #ifdef TXLIN_OLDCOMPILER
 #define nullptr 0
