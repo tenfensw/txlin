@@ -21,6 +21,7 @@ LICENSE file in the source folder for more info.
 #include <cctype>
 #include <cstdio>
 #include <cmath>
+#include <ctime>
 #include <csignal>
 #include <assert.h>
 #include <string>
@@ -46,9 +47,9 @@ LICENSE file in the source folder for more info.
 #define txthread_t pthread_t
 #endif
 
-#define TXLIN_VERSION "TXLin [Ver: 1.76d, Rev: 122, Date: 2019-11-06 20:44:00]"
+#define TXLIN_VERSION "TXLin [Ver: 1.76d, Rev: 125, Date: 2020-01-06 00:00:00]"
 #define TXLIN_AUTHOR "Copyright (C) RoverAMD/timkoi (Tim K, http://timkoi.gitlab.io/)"
-#define TXLIN_VERSIONNUM 0x176d122
+#define TXLIN_VERSIONNUM 0x176d125
 #ifdef TXLIN_MODULE
 #define _TX_MODULE TXLIN_MODULE
 #elif defined(_TX_MODULE)
@@ -531,6 +532,24 @@ namespace TX {
     }
 
     #define Sleep(ms) txSleep(ms)
+
+    inline int txPlayVideo(const char* fn) {
+        if (!fn) {
+            TXLIN_WARNING("txPlayVideo called with NULL argument, won't play anything");
+            return -1;
+        }
+#ifndef __APPLE__
+        // TODO: Implement support for Linux media players
+        TXLIN_WARNING("txPlayVideo only works on macOS, because currently, only QuickTime X is supported.");
+        return -1;
+#endif
+        std::string cmdQT = "open -a 'QuickTime Player' '" + fn + "'";
+        clock_t startTime = clock() / CLOCKS_PER_SEC;
+        system(cmdQT);
+        clock_t endTime = clock() / CLOCKS_PER_SEC;
+        int difference = (int)(endTime - startTime);
+        return difference;
+    }
 
     inline bool GetWindowRect(HWND window, RECT* where) {
         if (where == nullptr)
