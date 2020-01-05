@@ -545,7 +545,7 @@ namespace TX {
 #endif
         std::string cmdQT = "open -a 'QuickTime Player' '" + fn + "'";
         clock_t startTime = clock() / CLOCKS_PER_SEC;
-        system(cmdQT);
+        std::system(cmdQT);
         clock_t endTime = clock() / CLOCKS_PER_SEC;
         int difference = (int)(endTime - startTime);
         return difference;
