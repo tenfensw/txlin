@@ -37,7 +37,7 @@ if test "$1" = "--install"; then
 		exit 1
 	fi
 elif test "$1" = "--install-with-txlin"; then
-	if $0 --install; then
+	if sh "$0" --install; then
 		echo "Installed pkgconfig files"
 	else
 		echo "Did not install pkgconfig files, cannot install the library itself. Maybe run \"sudo $0 $*\" (without quotes, obviously)?"
